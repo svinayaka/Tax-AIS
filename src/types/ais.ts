@@ -168,3 +168,25 @@ export interface PdfParseResult {
   metadata: Record<string, unknown>;
   pdfDoc: unknown;
 }
+
+export interface VerifiedAisContract {
+  isValid: boolean;
+  healthScore: number;
+  hasPartA: boolean;
+  hasTdsCredits: boolean;
+  hasSftLedger: boolean;
+  hasChallanCIN: boolean;
+  hasDemandRefund: boolean;
+  isPiiScrubbed: boolean;
+  verifiedNodes: string[];
+  missingNodes: string[];
+  metrics: {
+    totalGrossCredited: number;
+    totalTdsDeducted: number;
+    totalTdsDeposited: number;
+    totalChallanPaid: number;
+    totalSftVolume: number;
+    totalRefundAmount: number;
+  };
+}
+

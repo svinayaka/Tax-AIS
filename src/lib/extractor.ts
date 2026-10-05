@@ -16,7 +16,8 @@ import type {
   PartB1LineItem,
   PartB2SftTransaction,
   PartB3TaxPayment,
-  PartB4DemandRefund
+  PartB4DemandRefund,
+  VerifiedAisContract
 } from '../types/ais';
 
 export function extractStructuredData(rawText: string, customFields: string[] = []): StructuredExtractionResult {
@@ -209,9 +210,9 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   };
 
   // 1. Emails
-  const emailRegex = /\b([a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b/gi;
+  const emailRegex = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
   const emailMatches = [...text.matchAll(emailRegex)];
-  entities.emails = [...new Set(emailMatches.map(m => m[1]))];
+  entities.emails = [...new Set(emailMatches.map(m => m[0]))];
 
   // 2. Phones
   const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
@@ -219,7 +220,7 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   entities.phones = [...new Set(phoneMatches.map(m => m[0].trim()))];
 
   // 3. URLs
-  const urlRegex = /(https?:\/\/\S+|www\.\S+|linkedin\.com\/in\/\S+|github\.com\/\S+)/gi;
+  const urlRegex = /(https?:\/\/[^\s,]+|www\.[^\s,]+)/gi;
   const urlMatches = [...text.matchAll(urlRegex)];
   entities.urls = [...new Set(urlMatches.map(m => m[0].replace(/[,.]$/, '')))];
 
@@ -229,19 +230,19 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   entities.dates = [...new Set(dateMatches.map(m => m[0].trim()))].slice(0, 10);
 
   // 5. Monetary Amounts
-  const moneyRegex = /[$€£¥₹]\s?(?:(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)\s?[MBK]?|\b(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\s?(?:USD|EUR|GBP|INR)\b/gi;
+  const moneyRegex = /[$€£¥₹]\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\b\d{1,3}(?:,\d{3})*(?:\.\d{2})?\s?(?:USD|EUR|GBP|INR)\b/gi;
   const moneyMatches = [...text.matchAll(moneyRegex)];
   entities.monetaryAmounts = [...new Set(moneyMatches.map(m => m[0].trim()))].slice(0, 15);
 
   // 6. Identifiers (Invoice #, PO #, Tax ID, MRN, CIK)
   const idPatterns = [
-    { label: 'Invoice #', regex: /(?:Invoice(?:\s+(?:Number|#))?|INV)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'PO #', regex: /(?:PO(?:\s+(?:Number|#))?|Purchase\s+Order)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'Tax ID / VAT', regex: /(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'MRN', regex: /(?:MRN|Medical\s+Record(?:\s+#)?)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'Account #', regex: /(?:Account(?:\s+(?:Number|#))?|ACT)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'Report ID', regex: /(?:Report\s+ID|Lab\s+ID)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
-    { label: 'SEC CIK', regex: /(?:SEC\s+CIK|CIK)\s*(?:[:#]\s*)?(\d+)/i }
+    { label: 'Invoice #', regex: /\b(?:Invoice\s+(?:Number|#)|INV)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'PO #', regex: /\b(?:PO\s+(?:Number|#)|Purchase\s+Order)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Tax ID / VAT', regex: /\b(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'MRN', regex: /\b(?:MRN|Medical\s+Record(?:\s+#)?)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Account #', regex: /\b(?:Account\s+(?:Number|#)|ACT)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Report ID', regex: /\b(?:Report\s+ID|Lab\s+ID)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'SEC CIK', regex: /\b(?:SEC\s+CIK|CIK)\s*[:#]?\s*(\d+)/i }
   ];
 
   idPatterns.forEach(pattern => {
@@ -778,6 +779,78 @@ function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayme
   return partB3;
 }
 
+function extractPartB2SftTransactions(text: string, lines: string[]): PartB2SftTransaction[] {
+  const partB2: PartB2SftTransaction[] = [];
+  const sftRegex = /(SFT-\d{1,4}[a-z0-9()/:.[\]-]*)\s+([a-z0-9\s()/-]{2,80}?)\s+([a-z0-9\s.,&/-]{2,80}?)\s+([\d,.]+)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/gi;
+  let match: RegExpExecArray | null;
+  while ((match = sftRegex.exec(text)) !== null) {
+    partB2.push({
+      sr_no: partB2.length + 1,
+      information_code: match[1].trim(),
+      information_description: match[2].trim(),
+      information_source: match[3].trim(),
+      amount: parseNum(match[4]),
+      transaction_date: match[5].trim()
+    });
+  }
+
+  if (partB2.length === 0) {
+    lines.forEach(line => {
+      if (line.includes('|') && line.includes('SFT-')) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr')) {
+          partB2.push({
+            sr_no: parseInt(parts[0], 10) || (partB2.length + 1),
+            information_code: parts[1] || 'SFT-005',
+            information_description: parts[2] || 'Specified Financial Transaction',
+            information_source: parts[3] || '',
+            amount: parseNum(parts[4]),
+            transaction_date: parts[5] || ''
+          });
+        }
+      }
+    });
+  }
+
+  return partB2;
+}
+
+function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4DemandRefund[] {
+  const partB4: PartB4DemandRefund[] = [];
+  const drRegex = /(\d{4}-\d{2})\s+(Refund|Demand)\s+([a-z0-9\s()/-]{2,80}?)\s+([\d,.]+)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/gi;
+  let match: RegExpExecArray | null;
+  while ((match = drRegex.exec(text)) !== null) {
+    partB4.push({
+      sr_no: partB4.length + 1,
+      financial_year: match[1].trim(),
+      mode: match[2].trim(),
+      nature: match[3].trim(),
+      amount: parseNum(match[4]),
+      date: match[5].trim()
+    });
+  }
+
+  if (partB4.length === 0) {
+    lines.forEach(line => {
+      if (line.includes('|') && (line.toLowerCase().includes('refund') || line.toLowerCase().includes('demand'))) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr') && /\d{4}-\d{2}/.test(parts[1])) {
+          partB4.push({
+            sr_no: parseInt(parts[0], 10) || (partB4.length + 1),
+            financial_year: parts[1] || '',
+            mode: parts[2] || 'Refund',
+            nature: parts[3] || 'Tax Refund under Section 244A',
+            amount: parseNum(parts[4]),
+            date: parts[5] || ''
+          });
+        }
+      }
+    });
+  }
+
+  return partB4;
+}
+
 export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema {
   const text = cleanText(rawText || '');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -785,9 +858,9 @@ export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema
   const taxYear = extractTaxYear(text);
   const partA = extractPartAGeneralInfo(text);
   const partB1 = extractPartB1Transactions(text, lines);
-  const partB2: PartB2SftTransaction[] = [];
+  const partB2 = extractPartB2SftTransactions(text, lines);
   const partB3 = extractPartB3TaxPayments(text, lines);
-  const partB4: PartB4DemandRefund[] = [];
+  const partB4 = extractPartB4DemandRefunds(text, lines);
 
   return {
     tax_year: taxYear,
@@ -798,3 +871,197 @@ export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema
     part_b4_demand_refunds: partB4
   };
 }
+
+/**
+ * Validates the extracted AIS Developer Schema against the Comprehensive Extraction Contract
+ */
+export function validateAisContract(data: AisDeveloperSchema, isPiiScrubbed = false): VerifiedAisContract {
+  return performValidation(data, isPiiScrubbed);
+}
+
+/**
+ * Performs the full validation logic previously in validateAisContract.
+ */
+function validatePartA(data: AisDeveloperSchema) {
+  const verified: string[] = [];
+  const missing: string[] = [];
+  const partA = data?.part_a_general_info;
+  const isPanValid = Boolean(partA?.pan && /^[a-z]{5}\d{4}[a-z]$/i.test(partA.pan.trim()));
+  const isTaxYearValid = Boolean(data?.tax_year && /^\d{4}-\d{2}$/.test(data.tax_year.trim()));
+  const isAssesseeNameValid = Boolean(partA?.name_of_assessee && partA.name_of_assessee.trim().length > 0);
+  const hasPartA = isPanValid && isTaxYearValid && isAssesseeNameValid;
+
+  if (isPanValid) verified.push(`PAN Identity (${partA.pan})`);
+  else missing.push('Valid PAN Format (Part A)');
+
+  if (isTaxYearValid) verified.push(`Tax Year Versioning (${data.tax_year})`);
+  else missing.push('Tax Year Assessment (e.g. 2026-27)');
+
+  if (isAssesseeNameValid) verified.push(`Taxpayer Legal Name (${partA.name_of_assessee})`);
+  else missing.push('Taxpayer Legal Name');
+
+  if (partA?.date_of_birth) verified.push('Date of Birth (Senior Citizen Allowances)');
+  if (partA?.address) verified.push('Residential Address & State Jurisdiction');
+
+  return {hasPartA, isPanValid, isTaxYearValid, isAssesseeNameValid, verified, missing, partA};
+}
+
+function validatePartB1(data: AisDeveloperSchema) {
+  const verified: string[] = [];
+  const missing: string[] = [];
+  const partB1 = data?.part_b1_tds_tcs_transactions || [];
+  let totalGrossCredited = 0;
+  let totalTdsDeducted = 0;
+  let totalTdsDeposited = 0;
+  partB1.forEach(tx => {
+    totalGrossCredited += tx.total_amount_credited || 0;
+    (tx.line_items || []).forEach(li => {
+      totalTdsDeducted += li.tds_deducted || 0;
+      totalTdsDeposited += li.tds_deposited || 0;
+    });
+  });
+  const hasTdsCredits = partB1.length > 0 && (totalTdsDeducted > 0 || totalGrossCredited > 0);
+  if (hasTdsCredits) {
+    verified.push(`TDS/TCS Credits (${partB1.length} entities, ${totalTdsDeducted.toLocaleString('en-IN')} deducted)`);
+  } else {
+    missing.push('Part B1 TDS/TCS Transactions');
+  }
+  return {hasTdsCredits, totalGrossCredited, totalTdsDeducted, totalTdsDeposited, verified, missing};
+}
+
+function validatePartB2(data: AisDeveloperSchema) {
+  const verified: string[] = [];
+  const missing: string[] = [];
+  const partB2 = data?.part_b2_sft_transactions || [];
+  const totalSftVolume = partB2.reduce((acc, tx) => acc + (tx.amount || (tx as any).transaction_amount || 0), 0);
+  const hasSftLedger = partB2.length > 0;
+  if (hasSftLedger) {
+    verified.push(`SFT Matrix (${partB2.length} records, ${totalSftVolume.toLocaleString('en-IN')})`);
+  }
+  return {hasSftLedger, totalSftVolume, verified, missing};
+}
+
+function validatePartB3(data: AisDeveloperSchema) {
+  const verified: string[] = [];
+  const missing: string[] = [];
+  const partB3 = data?.part_b3_tax_payments || [];
+  const totalChallanPaid = partB3.reduce((acc, tx) => acc + (tx.total_challan_amount || tx.tax_amount || 0), 0);
+  const hasChallanCIN = partB3.some(tx => /^\d{7}$/.test(tx.bsr_code) && tx.challan_serial_number > 0);
+  if (hasChallanCIN) {
+    verified.push(`Challan CIN Tokens (${partB3.length} records with 7-digit BSR & Serial)`);
+  } else if (partB3.length > 0) {
+    verified.push(`Tax Payments (${partB3.length} challan payments accounted)`);
+  }
+  return {hasChallanCIN, totalChallanPaid, verified, missing, partB3};
+}
+
+function validatePartB4(data: AisDeveloperSchema) {
+  const verified: string[] = [];
+  const missing: string[] = [];
+  const partB4 = data?.part_b4_demand_refunds || [];
+  const totalRefundAmount = partB4.reduce((acc, tx) => acc + (tx.amount || (tx as any).refund_amount || 0), 0);
+  const hasDemandRefund = partB4.length > 0;
+  if (hasDemandRefund) {
+    verified.push(`Demand & Refund Logs (${partB4.length} records mapped)`);
+  }
+  return {hasDemandRefund, totalRefundAmount, verified, missing};
+}
+
+function performValidation(data: AisDeveloperSchema, isPiiScrubbed = false): VerifiedAisContract {
+  const verifiedNodes: string[] = [];
+  const missingNodes: string[] = [];
+
+  const partARes = validatePartA(data);
+  const partB1Res = validatePartB1(data);
+  const partB2Res = validatePartB2(data);
+  const partB3Res = validatePartB3(data);
+  const partB4Res = validatePartB4(data);
+
+  verifiedNodes.push(...partARes.verified, ...partB1Res.verified, ...partB2Res.verified, ...partB3Res.verified, ...partB4Res.verified);
+  missingNodes.push(...partARes.missing, ...partB1Res.missing, ...partB2Res.missing, ...partB3Res.missing, ...partB4Res.missing);
+
+  // Health Score Calculation (mirroring original logic)
+  let healthScore = 0;
+  if (partARes.isPanValid) healthScore += 25;
+  if (partARes.isTaxYearValid) healthScore += 15;
+  if (partARes.isAssesseeNameValid) healthScore += 10;
+  if (partB1Res.hasTdsCredits) healthScore += 25;
+  if (partB3Res.hasChallanCIN || (partB3Res.partB3 && partB3Res.partB3.length > 0)) healthScore += 15;
+  if (partARes.partA?.date_of_birth || partARes.partA?.address) healthScore += 10;
+
+  const isScrubbed = isPiiScrubbed || Boolean(partARes.partA?.pan && (partARes.partA.pan.includes('X') || partARes.partA.pan.includes('*')));
+
+  return {
+    isValid: partARes.hasPartA && (partB1Res.hasTdsCredits || partB3Res.hasChallanCIN || partB2Res.hasSftLedger),
+    healthScore: Math.min(healthScore, 100),
+    hasPartA: partARes.hasPartA,
+    hasTdsCredits: partB1Res.hasTdsCredits,
+    hasSftLedger: partB2Res.hasSftLedger,
+    hasChallanCIN: partB3Res.hasChallanCIN,
+    hasDemandRefund: partB4Res.hasDemandRefund,
+    isPiiScrubbed: isScrubbed,
+    verifiedNodes,
+    missingNodes,
+    metrics: {
+      totalGrossCredited: partB1Res.totalGrossCredited,
+      totalTdsDeducted: partB1Res.totalTdsDeducted,
+      totalTdsDeposited: partB1Res.totalTdsDeposited,
+      totalChallanPaid: partB3Res.totalChallanPaid,
+      totalSftVolume: partB2Res.totalSftVolume,
+      totalRefundAmount: partB4Res.totalRefundAmount
+    }
+  };
+}
+
+
+/**
+ * Client-Side PII Scrubber for Safe Diagnostic Sharing and Masked Data Export
+ */
+export function scrubAisPii(schema: AisDeveloperSchema): AisDeveloperSchema {
+  const info = schema.part_a_general_info;
+
+  const maskPan = (pan: string): string => {
+    if (!pan || pan.length < 10) return 'XXXXX0000X';
+    return `${pan.slice(0, 3)}XXXX${pan.slice(7)}`;
+  };
+
+  const maskAadhaar = (aadhaar: string): string => {
+    if (!aadhaar) return 'XXXX XXXX 0000';
+    return `XXXX XXXX ${aadhaar.replace(/\s+/g, '').slice(-4)}`;
+  };
+
+  const maskEmail = (email: string): string => {
+    if (!email || !email.includes('@')) return 'masked@assessee.tax';
+    const [user, domain] = email.split('@');
+    const maskedUser = user.length > 2 ? `${user[0]}***${user.slice(-1)}` : '***';
+    return `${maskedUser}@${domain}`;
+  };
+
+  const maskPhone = (phone: string): string => {
+    if (!phone) return 'XXXXX-XXXXX';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 4) return 'XXXXX-XXXXX';
+    return `XXXXX-XX${digits.slice(-3)}`;
+  };
+
+  const maskAddress = (address: string): string => {
+    if (!address) return 'MASKED RESIDENTIAL ADDRESS, INDIA';
+    const parts = address.split(',');
+    const pin = parts.find(p => /\b\d{6}\b/.test(p))?.trim() || 'XXXXXX';
+    const state = parts[parts.length - 1]?.trim() || 'INDIA';
+    return `REDACTED RESIDENTIAL PREMISES, ${pin}, ${state}`;
+  };
+
+  return {
+    ...schema,
+    part_a_general_info: {
+      ...info,
+      pan: maskPan(info.pan),
+      aadhaar: maskAadhaar(info.aadhaar),
+      email_address: maskEmail(info.email_address),
+      mobile_number: maskPhone(info.mobile_number),
+      address: maskAddress(info.address)
+    }
+  };
+}
+
