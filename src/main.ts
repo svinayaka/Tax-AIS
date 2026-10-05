@@ -1,15 +1,17 @@
 import { createIcons, icons } from 'lucide';
 import confetti from 'canvas-confetti';
 
-import { parsePdfDocument, renderPageToCanvas } from './lib/pdf-parser';
+import { parsePdfDocument, renderPageToCanvas, type PdfDocumentLike } from './lib/pdf-parser';
 import { extractStructuredData } from './lib/extractor';
 import { SAMPLE_DOCUMENTS } from './lib/sample-data';
+import { escapeHtml, formatInr } from './lib/dom-utils';
 
 // Import Siddi-compliant Stencil / Web Components
 import './components/index';
 import { AisPartA } from './components/ais-part-a';
+import { AisDeductorCard } from './components/ais-deductor-card';
 import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
-import { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
+import type { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
 
 // ==========================================================================
 // Application State Interface & Object
@@ -18,7 +20,7 @@ interface AppState {
   theme: string;
   currentFile: File | { name: string; type?: string } | null;
   rawText: string;
-  pdfDoc: any;
+  pdfDoc: PdfDocumentLike | null;
   currentPageNum: number;
   totalPages: number;
   currentZoom: number;
@@ -48,7 +50,7 @@ function refreshIcons(): void {
 // ==========================================================================
 // Toast Notification Engine
 // ==========================================================================
-function showToast(message: string, type: 'info' | 'success' | 'error' = 'info', duration: number = 3000): void {
+function showToast(message: string, type: 'info' | 'success' | 'error' = 'info', duration = 3000): void {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
@@ -61,7 +63,7 @@ function showToast(message: string, type: 'info' | 'success' | 'error' = 'info',
   const iconName = iconMap[type] || 'shield-check';
   toast.innerHTML = `
     <i data-lucide="${iconName}" class="toast-icon"></i>
-    <span>${message}</span>
+    <span>${escapeHtml(message)}</span>
   `;
 
   container.appendChild(toast);
@@ -97,7 +99,7 @@ function initTheme(): void {
 // ==========================================================================
 let pendingPasswordResolver: { resolve: (password: string | null) => void } | null = null;
 
-function promptForPdfPassword(isRetry: boolean = false): Promise<string | null> {
+function promptForPdfPassword(isRetry = false): Promise<string | null> {
   return new Promise((resolve) => {
     const backdrop = document.getElementById('passwordModalBackdrop');
     const input = document.getElementById('aisPasswordInput') as HTMLInputElement | null;
@@ -122,7 +124,7 @@ function promptForPdfPassword(isRetry: boolean = false): Promise<string | null> 
   });
 }
 
-function closePasswordModal(cancelled: boolean = false): void {
+function closePasswordModal(cancelled = false): void {
   const backdrop = document.getElementById('passwordModalBackdrop');
   if (backdrop) backdrop.classList.add('hidden');
   if (pendingPasswordResolver) {
@@ -136,6 +138,134 @@ function closePasswordModal(cancelled: boolean = false): void {
 // ==========================================================================
 // File Ingestion & Extraction Orchestrator (PDF, TXT, CSV, JSON)
 // ==========================================================================
+async function processPdfFile(
+  file: File,
+  fill: HTMLElement | null,
+  title: HTMLElement | null,
+  detail: HTMLElement | null
+): Promise<void> {
+  const parseResult = await parsePdfDocument(
+    file,
+    ({ stage, percent, message }) => {
+      if (fill) fill.style.width = `${percent}%`;
+      if (detail) detail.textContent = message;
+      if (title) {
+        if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
+        if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
+        if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
+        if (stage === 'finishing') title.textContent = 'Sanitizing PII & Finalizing...';
+      }
+    },
+    null,
+    promptForPdfPassword
+  );
+
+  state.currentFile = file;
+  state.rawText = parseResult.rawText;
+  state.pdfDoc = parseResult.pdfDoc as PdfDocumentLike;
+  state.totalPages = parseResult.pageCount || 1;
+  state.currentPageNum = 1;
+
+  state.structuredData = extractStructuredData(parseResult.rawText);
+
+  // Render First Page to Canvas
+  if (state.pdfDoc) {
+    const page = await state.pdfDoc.getPage(1);
+    const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+    document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
+    if (canvas) {
+      canvas.classList.remove('hidden');
+      await renderPageToCanvas(page, canvas, state.currentZoom);
+    }
+    updatePdfNavControls();
+  }
+}
+
+async function processJsonFile(
+  file: File,
+  fill: HTMLElement | null,
+  title: HTMLElement | null
+): Promise<void> {
+  if (fill) fill.style.width = '50%';
+  if (title) title.textContent = 'Reading JSON Schema...';
+  const textContent = await file.text();
+  state.currentFile = file;
+  state.rawText = textContent;
+  state.pdfDoc = null;
+  state.totalPages = 1;
+  state.currentPageNum = 1;
+
+  try {
+    const parsedJson = JSON.parse(textContent);
+    if (parsedJson.part_a_general_info || parsedJson.part_b1_tds_tcs_transactions) {
+      state.structuredData = {
+        documentClassification: {
+          type: 'ais',
+          confidence: 'high',
+          score: 98,
+          label: 'Annual Information Statement (AIS - Form 168)',
+          icon: 'file-text',
+          themeColor: 'var(--ksv-ds-color-indigo-500)'
+        },
+        summary: {
+          overview: `Annual Information Statement for Tax Year ${parsedJson.tax_year || '2026-27'}`,
+          keyHighlights: [],
+          completeness: 'Complete'
+        },
+        metadata: {
+          extractionDurationMs: 5,
+          characterCount: textContent.length,
+          wordCount: textContent.split(/\s+/).length,
+          lineCount: textContent.split('\n').length,
+          confidenceScore: 98,
+          extractedAt: new Date().toISOString()
+        },
+        keyValues: {},
+        flatKeyValues: [],
+        entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
+        tables: [],
+        sections: [],
+        customFieldResults: {},
+        aisJson: parsedJson
+      };
+      return;
+    }
+  } catch {
+    // Fall back to standard extraction
+  }
+
+  state.structuredData = extractStructuredData(textContent);
+}
+
+async function processTextOrCsvFile(
+  file: File,
+  fill: HTMLElement | null,
+  title: HTMLElement | null
+): Promise<void> {
+  if (fill) fill.style.width = '50%';
+  if (title) title.textContent = 'Reading Document Text...';
+  const textContent = await file.text();
+  state.currentFile = file;
+  state.rawText = textContent;
+  state.pdfDoc = null;
+  state.totalPages = 1;
+  state.currentPageNum = 1;
+
+  state.structuredData = extractStructuredData(textContent);
+}
+
+function updateDocViewDisplay(): void {
+  const canvas = document.getElementById('pdfPageCanvas');
+  const placeholder = document.getElementById('pdfNoPreviewMessage');
+  if (!state.pdfDoc) {
+    if (canvas) canvas.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    setDocViewMode('text');
+  } else {
+    setDocViewMode('canvas');
+  }
+}
+
 async function handleFileUpload(file: File): Promise<void> {
   const fileName = file.name.toLowerCase();
   const overlay = document.getElementById('uploadProgressOverlay');
@@ -147,129 +277,23 @@ async function handleFileUpload(file: File): Promise<void> {
 
   try {
     if (fileName.endsWith('.pdf') || file.type === 'application/pdf') {
-      // 1. PDF File Processing
-      const parseResult = await parsePdfDocument(
-        file,
-        ({ stage, percent, message }) => {
-          if (fill) fill.style.width = `${percent}%`;
-          if (detail) detail.textContent = message;
-          if (title) {
-            if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
-            if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
-            if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
-            if (stage === 'finishing') title.textContent = 'Sanitizing PII & Finalizing...';
-          }
-        },
-        null,
-        promptForPdfPassword
-      );
-
-      state.currentFile = file;
-      state.rawText = parseResult.rawText;
-      state.pdfDoc = parseResult.pdfDoc;
-      state.totalPages = parseResult.pageCount || 1;
-      state.currentPageNum = 1;
-
-      state.structuredData = extractStructuredData(parseResult.rawText);
-
-      // Render First Page to Canvas
-      if (state.pdfDoc) {
-        const page = await state.pdfDoc.getPage(1);
-        const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
-        document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
-        if (canvas) {
-          canvas.classList.remove('hidden');
-          await renderPageToCanvas(page, canvas, state.currentZoom);
-        }
-        updatePdfNavControls();
-      }
-
+      await processPdfFile(file, fill, title, detail);
     } else if (fileName.endsWith('.json') || file.type === 'application/json') {
-      // 2. JSON File Processing
-      if (fill) fill.style.width = '50%';
-      if (title) title.textContent = 'Reading JSON Schema...';
-      const textContent = await file.text();
-      state.currentFile = file;
-      state.rawText = textContent;
-      state.pdfDoc = null;
-      state.totalPages = 1;
-      state.currentPageNum = 1;
-
-      try {
-        const parsedJson = JSON.parse(textContent);
-        if (parsedJson.part_a_general_info || parsedJson.part_b1_tds_tcs_transactions) {
-          state.structuredData = {
-            documentClassification: {
-              type: 'ais',
-              confidence: 'high',
-              score: 98,
-              label: 'Annual Information Statement (AIS - Form 168)',
-              icon: 'file-text',
-              themeColor: 'var(--ksv-ds-color-indigo-500)'
-            },
-            summary: {
-              overview: `Annual Information Statement for Tax Year ${parsedJson.tax_year || '2026-27'}`,
-              keyHighlights: [],
-              completeness: 'Complete'
-            },
-            metadata: {
-              extractionDurationMs: 5,
-              characterCount: textContent.length,
-              wordCount: textContent.split(/\s+/).length,
-              lineCount: textContent.split('\n').length,
-              confidenceScore: 98,
-              extractedAt: new Date().toISOString()
-            },
-            keyValues: {},
-            flatKeyValues: [],
-            entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
-            tables: [],
-            sections: [],
-            customFieldResults: {},
-            aisJson: parsedJson
-          };
-        } else {
-          state.structuredData = extractStructuredData(textContent);
-        }
-      } catch {
-        state.structuredData = extractStructuredData(textContent);
-      }
-
+      await processJsonFile(file, fill, title);
     } else {
-      // 3. Text or CSV File Processing
-      if (fill) fill.style.width = '50%';
-      if (title) title.textContent = 'Reading Document Text...';
-      const textContent = await file.text();
-      state.currentFile = file;
-      state.rawText = textContent;
-      state.pdfDoc = null;
-      state.totalPages = 1;
-      state.currentPageNum = 1;
-
-      state.structuredData = extractStructuredData(textContent);
+      await processTextOrCsvFile(file, fill, title);
     }
 
-    // Update Views
-    renderAllViews(file.name);
+    renderAllViews();
+    updateDocViewDisplay();
 
-    // Hide PDF canvas if not a PDF file
-    const canvas = document.getElementById('pdfPageCanvas');
-    const placeholder = document.getElementById('pdfNoPreviewMessage');
-    if (!state.pdfDoc) {
-      if (canvas) canvas.classList.add('hidden');
-      if (placeholder) placeholder.classList.remove('hidden');
-      setDocViewMode('text');
-    } else {
-      setDocViewMode('canvas');
-    }
-
-    // Success celebration
     triggerConfetti();
     showToast('AIS extracted successfully!', 'success');
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error parsing document:', error);
-    showToast(`Failed to parse document: ${error?.message || 'Unknown error'}`, 'error', 4000);
+    showToast(`Failed to parse document: ${errorMsg}`, 'error', 4000);
   } finally {
     if (overlay) overlay.classList.add('hidden');
   }
@@ -308,7 +332,7 @@ async function loadSampleAis(): Promise<void> {
   state.currentPageNum = 1;
   state.structuredData = extractStructuredData(sample.rawText);
 
-  renderAllViews('AIS_Reference_2026-27.txt');
+  renderAllViews();
   setDocViewMode('text');
   if (overlay) overlay.classList.add('hidden');
 
@@ -346,7 +370,7 @@ function triggerConfetti(): void {
 // ==========================================================================
 // Rendering Pipeline
 // ==========================================================================
-function renderAllViews(_fileName: string): void {
+function renderAllViews(): void {
   const data = state.structuredData;
   if (!data) return;
 
@@ -387,8 +411,8 @@ function renderAllViews(_fileName: string): void {
   const kpiPaid = document.getElementById('kpiTaxPaid');
 
   if (kpiCount) kpiCount.textContent = String(partB1.length);
-  if (kpiCredited) kpiCredited.textContent = `₹${totalCredited.toLocaleString('en-IN')}`;
-  if (kpiPaid) kpiPaid.textContent = `₹${totalTaxPaid.toLocaleString('en-IN')}`;
+  if (kpiCredited) kpiCredited.textContent = formatInr(totalCredited);
+  if (kpiPaid) kpiPaid.textContent = formatInr(totalTaxPaid);
 
   // 3. Render AIS Dashboard (Part A & Part B)
   renderAisDashboard(ais);
@@ -409,13 +433,21 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
   const container = document.getElementById('aisDashboardContainer');
   if (!container) return;
 
-  const partA = ais.part_a_general_info || {} as any;
+  const partA = ais.part_a_general_info || {
+    name_of_assessee: '',
+    pan: '',
+    aadhaar: '',
+    date_of_birth: '',
+    mobile_number: '',
+    email_address: '',
+    address: ''
+  };
   const partB1 = ais.part_b1_tds_tcs_transactions || [];
   const partB2 = ais.part_b2_sft_transactions || [];
   const partB3 = ais.part_b3_tax_payments || [];
   const partB4 = ais.part_b4_demand_refunds || [];
 
-  let html = `
+  const html = `
     <div class="ais-dashboard-wrapper">
       
       <!-- Assessee Info Banner -->
@@ -447,64 +479,12 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
         </div>
 
         <div class="ais-deductors-container">
-          ${partB1.length > 0 ? partB1.map((deductor) => `
-            <div class="ais-deductor-block">
-              <div class="ais-deductor-header">
-                <div>
-                  <div class="ais-deductor-name">${escapeHtml(deductor.information_source)}</div>
-                  <div class="ais-deductor-meta">
-                    <strong>Code:</strong> ${escapeHtml(deductor.information_code)} &bull; ${escapeHtml(deductor.information_description)}
-                  </div>
-                </div>
-                <div class="ais-deductor-metrics">
-                  <div class="ais-metric-pill">
-                    <span class="ais-metric-label">Total Amount Credited</span>
-                    <span class="ais-metric-val">₹${(deductor.total_amount_credited || deductor.total_amount || 0).toLocaleString('en-IN')}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Nested Quarterly Line Items -->
-              <div class="table-responsive">
-                <table class="data-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Quarter</th>
-                      <th>Date of Payment / Credit</th>
-                      <th>Amount Paid / Credited</th>
-                      <th>TDS Deducted</th>
-                      <th>TDS Deposited</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${(deductor.line_items || []).map((item, idx) => `
-                      <tr>
-                        <td>${item.sr_no || idx + 1}</td>
-                        <td><span class="meta-pill" style="font-size:0.75rem;">${escapeHtml(item.quarter)}</span></td>
-                        <td>${escapeHtml(item.date_of_payment)}</td>
-                        <td><strong>₹${Number(item.amount_paid_credited).toLocaleString('en-IN')}</strong></td>
-                        <td style="color:var(--ksv-ds-status-warning-icon); font-weight:600;">₹${Number(item.tds_deducted).toLocaleString('en-IN')}</td>
-                        <td style="color:var(--ksv-ds-status-success-icon); font-weight:600;">₹${Number(item.tds_deposited).toLocaleString('en-IN')}</td>
-                        <td>
-                          <span class="status-pill-active">
-                            <i data-lucide="check-circle-2" class="btn-icon-xs"></i>
-                            ${escapeHtml(item.status || 'Active')}
-                          </span>
-                        </td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          `).join('') : `
+          ${partB1.length === 0 ? `
             <div class="ais-empty-part">
               <i data-lucide="info" class="btn-icon-sm"></i>
               <span>No TDS / TCS transactions recorded for this period.</span>
             </div>
-          `}
+          ` : ''}
         </div>
       </div>
 
@@ -538,7 +518,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
                     <td><span class="meta-pill">${escapeHtml(sft.information_code)}</span></td>
                     <td>${escapeHtml(sft.information_description)}</td>
                     <td>${escapeHtml(sft.information_source)}</td>
-                    <td><strong>₹${Number(sft.amount || sft.transaction_amount).toLocaleString('en-IN')}</strong></td>
+                    <td><strong>${formatInr(sft.amount || sft.transaction_amount)}</strong></td>
                     <td>${escapeHtml(sft.transaction_date)}</td>
                   </tr>
                 `).join('')}
@@ -582,7 +562,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
                   <tr>
                     <td>${escapeHtml(ref.financial_year || ref.assessment_year || '')}</td>
                     <td>${escapeHtml(ref.nature_of_refund || ref.nature || '')}</td>
-                    <td><strong>₹${Number(ref.refund_amount || ref.amount).toLocaleString('en-IN')}</strong></td>
+                    <td><strong>${formatInr(ref.refund_amount || ref.amount)}</strong></td>
                     <td>${escapeHtml(ref.date_of_payment || ref.date_of_issuance || '')}</td>
                   </tr>
                 `).join('')}
@@ -605,6 +585,17 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
   // Set reactive properties on custom elements
   const partAComp = container.querySelector('ais-part-a') as AisPartA | null;
   if (partAComp) partAComp.data = partA;
+
+  // Populate Deductor Cards dynamically using <ais-deductor-card> Web Component
+  const deductorsContainer = container.querySelector('.ais-deductors-container');
+  if (deductorsContainer && partB1.length > 0) {
+    deductorsContainer.innerHTML = '';
+    partB1.forEach((deductor) => {
+      const card = document.createElement('ais-deductor-card') as AisDeductorCard;
+      card.deductor = deductor;
+      deductorsContainer.appendChild(card);
+    });
+  }
 
   const taxPayComp = container.querySelector('ais-tax-payment-card') as AisTaxPaymentCard | null;
   if (taxPayComp) taxPayComp.payments = partB3;
@@ -804,16 +795,6 @@ function setupEventListeners(): void {
     const isPass = input.type === 'password';
     input.type = isPass ? 'text' : 'password';
   });
-}
-
-function escapeHtml(str: string | null | undefined): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 // ==========================================================================

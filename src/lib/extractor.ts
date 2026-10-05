@@ -46,7 +46,7 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
   const summary = generateSummary(cleanedText, docClassification, keyValues, entities);
 
   // 7. Process Custom Fields if user requested any
-  const customFieldResults: Record<string, any> = {};
+  const customFieldResults: Record<string, string> = {};
   if (customFields && customFields.length > 0) {
     customFields.forEach(field => {
       customFieldResults[field] = findCustomFieldValue(field, cleanedText, keyValues);
@@ -327,7 +327,7 @@ function extractTables(text: string, _docType: string): ExtractedTable[] {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   let currentHeaders: string[] = [];
-  let currentRows: Record<string, any>[] = [];
+  let currentRows: Record<string, string | number | null>[] = [];
   let tableTitle = 'Extracted Table';
 
   for (let i = 0; i < lines.length; i++) {
@@ -347,7 +347,7 @@ function extractTables(text: string, _docType: string): ExtractedTable[] {
           currentRows = [];
           tableTitle = i > 0 && lines[i - 1].length < 60 && !lines[i - 1].includes('|') ? lines[i - 1] : `Table ${tables.length + 1}`;
         } else if (currentHeaders.length > 0 && cells.length >= Math.min(3, currentHeaders.length - 1)) {
-          const rowObj: Record<string, any> = {};
+          const rowObj: Record<string, string | number | null> = {};
           currentHeaders.forEach((h, colIdx) => {
             const propKey = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
             rowObj[propKey] = cells[colIdx] || '';
@@ -448,7 +448,7 @@ function findCustomFieldValue(field: string, text: string, keyValues: KeyValuePa
 // Specialized AIS / Form 168 Deterministic Parser & Sanitizer
 // ==========================================================================
 
-function parseNum(val: any): number {
+function parseNum(val: unknown): number {
   if (typeof val === 'number') return val;
   if (!val) return 0;
   const cleanStr = String(val).replace(/[₹,Rs.\s]/gi, '').trim();

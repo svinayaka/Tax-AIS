@@ -11,8 +11,10 @@ export class AisKpiCard extends HTMLElement {
     this.render();
   }
 
-  attributeChangedCallback(): void {
-    this.render();
+  attributeChangedCallback(_name: string, oldValue: string, newValue: string): void {
+    if (oldValue !== newValue) {
+      this.render();
+    }
   }
 
   render(): void {

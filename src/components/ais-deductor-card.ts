@@ -1,4 +1,5 @@
-import { PartB1TdsTcsTransaction } from '../types/ais';
+import type { PartB1TdsTcsTransaction } from '../types/ais';
+import { escapeHtml, formatInr } from '../lib/dom-utils';
 
 /**
  * <ais-deductor-card> Web Component
@@ -7,10 +8,6 @@ import { PartB1TdsTcsTransaction } from '../types/ais';
  */
 export class AisDeductorCard extends HTMLElement {
   private _deductor: PartB1TdsTcsTransaction | null = null;
-
-  constructor() {
-    super();
-  }
 
   set deductor(val: PartB1TdsTcsTransaction | null) {
     this._deductor = val;
@@ -26,24 +23,24 @@ export class AisDeductorCard extends HTMLElement {
   }
 
   render(): void {
-    const d = this._deductor || {} as Partial<PartB1TdsTcsTransaction>;
-    const lineItems = d.line_items || [];
-    const total = d.total_amount_credited || d.total_amount || 0;
+    const d = this._deductor;
+    const lineItems = d?.line_items ?? [];
+    const total = d?.total_amount_credited ?? d?.total_amount ?? 0;
 
     this.className = 'ais-deductor-block';
     this.innerHTML = `
       <div class="ais-deductor-header">
         <div>
-          <div class="ais-deductor-name">${escapeHtml(d.information_source || 'Deductor Entity')}</div>
+          <div class="ais-deductor-name">${escapeHtml(d?.information_source || 'Deductor Entity')}</div>
           <div class="ais-deductor-meta">
-            <strong>Code:</strong> ${escapeHtml(d.information_code || 'TDS')} &bull; ${escapeHtml(d.information_description || '')}
+            <strong>Code:</strong> ${escapeHtml(d?.information_code || 'TDS')} &bull; ${escapeHtml(d?.information_description || '')}
           </div>
         </div>
         <div class="ais-deductor-metrics">
           <div class="ais-metric-pill">
             <span class="ais-metric-label">Total Amount Credited</span>
             <span class="ais-metric-val" style="color:var(--ksv-ds-text-brand); font-weight:var(--ksv-ds-font-weight-bold);">
-              ₹${Number(total).toLocaleString('en-IN')}
+              ${formatInr(total)}
             </span>
           </div>
         </div>
@@ -65,12 +62,12 @@ export class AisDeductorCard extends HTMLElement {
           <tbody>
             ${lineItems.map((item, idx) => `
               <tr>
-                <td>${item.sr_no || idx + 1}</td>
+                <td>${item.sr_no ?? (idx + 1)}</td>
                 <td><span class="meta-pill" style="font-size:var(--ksv-ds-text-2xs);">${escapeHtml(item.quarter)}</span></td>
                 <td>${escapeHtml(item.date_of_payment)}</td>
-                <td><strong>₹${Number(item.amount_paid_credited).toLocaleString('en-IN')}</strong></td>
-                <td style="color:var(--ksv-ds-status-warning-icon);">₹${Number(item.tds_deducted).toLocaleString('en-IN')}</td>
-                <td style="color:var(--ksv-ds-status-success-icon);">₹${Number(item.tds_deposited).toLocaleString('en-IN')}</td>
+                <td><strong>${formatInr(item.amount_paid_credited)}</strong></td>
+                <td style="color:var(--ksv-ds-status-warning-icon);">${formatInr(item.tds_deducted)}</td>
+                <td style="color:var(--ksv-ds-status-success-icon);">${formatInr(item.tds_deposited)}</td>
                 <td>
                   <span class="status-pill-active">
                     <i data-lucide="check-circle-2" class="btn-icon-xs"></i>
@@ -84,16 +81,6 @@ export class AisDeductorCard extends HTMLElement {
       </div>
     `;
   }
-}
-
-function escapeHtml(str: string | null | undefined): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 if (!customElements.get('ais-deductor-card')) {

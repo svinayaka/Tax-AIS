@@ -59,7 +59,7 @@ export async function parsePdfDocument(
 
   onProgress({ stage: 'loading', percent: 15, message: 'Loading PDF binary stream...' });
 
-  const docInitParams: any = {
+  const docInitParams: Record<string, unknown> = {
     data: arrayBuffer,
     cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`,
     cMapPacked: true,
@@ -70,7 +70,7 @@ export async function parsePdfDocument(
     docInitParams.password = password;
   }
 
-  const loadingTask = pdfjsLib.getDocument(docInitParams);
+  const loadingTask = pdfjsLib.getDocument(docInitParams as Parameters<typeof pdfjsLib.getDocument>[0]);
 
   if (onPasswordRequest) {
     loadingTask.onPassword = async (callback: (pwdOrErr: string | Error) => void, reason: number) => {
@@ -82,7 +82,7 @@ export async function parsePdfDocument(
         } else {
           callback(new Error('Password cancelled by user'));
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         callback(err instanceof Error ? err : new Error(String(err)));
       }
     };
@@ -90,7 +90,7 @@ export async function parsePdfDocument(
 
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
-  const pagesData: any[] = [];
+  const pagesData: PdfParseResult['pages'] = [];
   const fullTextParts: string[] = [];
 
   onProgress({ stage: 'parsing', percent: 35, message: `Extracting ${numPages} page(s)...` });
@@ -101,11 +101,20 @@ export async function parsePdfDocument(
     const textContent = await page.getTextContent();
     
     // Sort text items by vertical position (top to bottom), then horizontal (left to right)
-    const items: TextItem[] = (textContent.items as any[]).map(item => {
+    const rawItems = textContent.items as Array<{
+      str: string;
+      dir: string;
+      width: number;
+      height?: number;
+      transform: number[];
+      fontName?: string;
+      hasEOL?: boolean;
+    }>;
+
+    const items: TextItem[] = rawItems.map(item => {
       const transform = item.transform;
-      // transform[4] is x, transform[5] is y in PDF coordinate space (y starts at bottom)
       const x = transform[4];
-      const y = viewport.height - transform[5]; // Flip Y for standard DOM top-left origin
+      const y = viewport.height - transform[5]; // Flip Y for standard DOM origin
       const width = item.width * (viewport.scale / (viewport.scale || 1));
       const height = item.height || Math.abs(transform[0]) || 12;
       return {
@@ -122,7 +131,7 @@ export async function parsePdfDocument(
       };
     });
 
-    // Reconstruct lines preserving layout
+    // Reconstruct lines preserving spatial layout
     const lines = groupItemsIntoLines(items);
     const pageText = lines.map(line => line.text || '').join('\n');
 
@@ -143,9 +152,9 @@ export async function parsePdfDocument(
   }
 
   // Extract document metadata
-  let docMetadata: Record<string, any> = {};
+  let docMetadata: Record<string, unknown> = {};
   try {
-    const meta: any = await pdf.getMetadata();
+    const meta = (await pdf.getMetadata()) as { info?: Record<string, string> };
     docMetadata = {
       title: meta?.info?.Title || fileName,
       author: meta?.info?.Author || 'Unknown',
@@ -203,10 +212,7 @@ function groupItemsIntoLines(items: TextItem[]): TextLine[] {
       currentLine.maxX = Math.max(currentLine.maxX, item.x + item.width);
       currentLine.y = (currentLine.y * (currentLine.items.length - 1) + item.y) / currentLine.items.length;
     } else {
-      currentLine.items.sort((a, b) => a.x - b.x);
-      currentLine.text = assembleLineText(currentLine.items);
-      lines.push(currentLine);
-
+      lines.push(finalizeLine(currentLine));
       currentLine = {
         y: item.y,
         items: [item],
@@ -218,40 +224,70 @@ function groupItemsIntoLines(items: TextItem[]): TextLine[] {
   }
 
   if (currentLine.items.length > 0) {
-    currentLine.items.sort((a, b) => a.x - b.x);
-    currentLine.text = assembleLineText(currentLine.items);
-    lines.push(currentLine);
+    lines.push(finalizeLine(currentLine));
   }
 
   return lines;
 }
 
+function finalizeLine(line: TextLine): TextLine {
+  line.items.sort((a, b) => a.x - b.x);
+  line.text = assembleLineText(line.items);
+  return line;
+}
+
 function assembleLineText(items: TextItem[]): string {
-  let text = '';
+  const parts: string[] = [];
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (i > 0) {
       const prev = items[i - 1];
       const gap = item.x - (prev.x + prev.width);
       if (gap > 4) {
-        text += ' ';
+        parts.push(' ');
       }
     }
-    text += item.str;
+    parts.push(item.str);
   }
-  return text.trim();
+  return parts.join('').trim();
+}
+
+export interface PdfPageViewport {
+  width: number;
+  height: number;
+  scale: number;
+}
+
+export interface PdfDocumentLike {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfRenderablePage>;
+  getMetadata?: () => Promise<{ info?: Record<string, string> }>;
+}
+
+export interface PdfRenderablePage {
+  getViewport: (options: { scale: number }) => PdfPageViewport;
+  render: (renderContext: {
+    canvasContext: CanvasRenderingContext2D;
+    viewport: PdfPageViewport;
+    enableWebGL?: boolean;
+    renderInteractiveForms?: boolean;
+  }) => { promise: Promise<void> };
 }
 
 /**
  * Render a specific page to an HTML Canvas element with HiDPI (Retina) crispness
  */
-export async function renderPageToCanvas(pageObject: any, canvas: HTMLCanvasElement, scale = 1.5): Promise<any> {
-  if (!pageObject || !canvas) return;
+export async function renderPageToCanvas(
+  pageObject: PdfRenderablePage | null | undefined,
+  canvas: HTMLCanvasElement | null,
+  scale = 1.5
+): Promise<PdfPageViewport | undefined> {
+  if (!pageObject || !canvas) return undefined;
 
   const dpr = Math.max(window.devicePixelRatio || 1, 2);
   const viewport = pageObject.getViewport({ scale });
   const context = canvas.getContext('2d', { alpha: false });
-  if (!context) return;
+  if (!context) return undefined;
 
   // Set internal resolution multiplied by DPR for razor-sharp vector text rendering
   canvas.width = Math.floor(viewport.width * dpr);

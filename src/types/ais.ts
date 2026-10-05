@@ -96,7 +96,7 @@ export interface KeyValuePair {
 export interface ExtractedTable {
   title: string;
   headers: string[];
-  rows: Record<string, any>[];
+  rows: Record<string, string | number | null>[];
 }
 
 export interface DocumentSection {
@@ -136,7 +136,7 @@ export interface StructuredExtractionResult {
   };
   tables: ExtractedTable[];
   sections: DocumentSection[];
-  customFieldResults: Record<string, any>;
+  customFieldResults: Record<string, string>;
   aisJson: AisDeveloperSchema | null;
 }
 
@@ -146,12 +146,23 @@ export interface PdfParseProgress {
   message: string;
 }
 
+export interface PdfPageData {
+  pageNumber: number;
+  width: number;
+  height: number;
+  items: unknown[];
+  lines: unknown[];
+  text: string;
+  pageObject: unknown;
+  viewport: unknown;
+}
+
 export interface PdfParseResult {
   fileName: string;
   fileSize: number;
   pageCount: number;
   rawText: string;
-  pages: any[];
-  metadata: Record<string, any>;
-  pdfDoc: any;
+  pages: PdfPageData[];
+  metadata: Record<string, unknown>;
+  pdfDoc: unknown;
 }

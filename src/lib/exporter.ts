@@ -1,10 +1,11 @@
-import { StructuredExtractionResult } from '../types/ais';
+import type { StructuredExtractionResult } from '../types/ais';
+import { escapeCsv } from './dom-utils';
 
 /**
  * Exporter utility for transforming structured extraction results into multiple formats
  */
 
-export function exportToJson(structuredData: StructuredExtractionResult | null, pretty: boolean = true): string {
+export function exportToJson(structuredData: StructuredExtractionResult | null, pretty = true): string {
   if (!structuredData) return '{}';
 
   if (structuredData.aisJson) {
@@ -25,11 +26,9 @@ export function exportToJson(structuredData: StructuredExtractionResult | null, 
     tables: structuredData.tables.map(t => ({
       title: t.title,
       headers: t.headers,
-      rows: t.rows.map(r => {
-        const copy = { ...r };
-        delete copy._rawCells;
-        return copy;
-      })
+      rows: t.rows.map(r => Object.fromEntries(
+        Object.entries(r).filter(([k]) => k !== '_rawCells')
+      ))
     })),
     sections: structuredData.sections
   };
@@ -60,7 +59,7 @@ export function exportToCsv(structuredData: StructuredExtractionResult | null): 
       tbl.rows.forEach(row => {
         const rowCells = tbl.headers.map(h => {
           const key = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
-          return `"${escapeCsv(row[key] || '')}"`;
+          return `"${escapeCsv(row[key] ?? '')}"`;
         });
         parts.push(rowCells.join(','));
       });
@@ -108,7 +107,7 @@ export function exportToMarkdown(structuredData: StructuredExtractionResult | nu
       tbl.rows.forEach(row => {
         const cells = tbl.headers.map(h => {
           const key = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
-          return row[key] || '';
+          return row[key] ?? '';
         });
         md += `| ${cells.join(' | ')} |\n`;
       });
@@ -117,7 +116,6 @@ export function exportToMarkdown(structuredData: StructuredExtractionResult | nu
   }
 
   if (structuredData.sections && structuredData.sections.length > 0) {
-    md += `## Document Sections\n\n`;
     structuredData.sections.forEach(sec => {
       md += `### ${sec.title}\n`;
       if (sec.content && sec.content.length > 0) {
@@ -133,11 +131,6 @@ export function exportToMarkdown(structuredData: StructuredExtractionResult | nu
   }
 
   return md;
-}
-
-function escapeCsv(val: any): string {
-  if (val === null || val === undefined) return '';
-  return String(val).replace(/"/g, '""');
 }
 
 /**

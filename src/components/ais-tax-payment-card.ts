@@ -1,4 +1,5 @@
-import { PartB3TaxPayment } from '../types/ais';
+import type { PartB3TaxPayment } from '../types/ais';
+import { escapeHtml, formatInr } from '../lib/dom-utils';
 
 /**
  * <ais-tax-payment-card> Web Component
@@ -8,12 +9,8 @@ import { PartB3TaxPayment } from '../types/ais';
 export class AisTaxPaymentCard extends HTMLElement {
   private _payments: PartB3TaxPayment[] = [];
 
-  constructor() {
-    super();
-  }
-
   set payments(val: PartB3TaxPayment[] | null) {
-    this._payments = val || [];
+    this._payments = val ?? [];
     this.render();
   }
 
@@ -26,7 +23,7 @@ export class AisTaxPaymentCard extends HTMLElement {
   }
 
   render(): void {
-    const list = this._payments || [];
+    const list = this._payments;
 
     this.className = 'ais-part-section';
     this.innerHTML = `
@@ -60,9 +57,9 @@ export class AisTaxPaymentCard extends HTMLElement {
                   <td>${escapeHtml(ch.major_head)}</td>
                   <td><span class="meta-pill" style="font-size:var(--ksv-ds-text-2xs);">${escapeHtml(ch.minor_head)}</span></td>
                   <td style="color:var(--ksv-ds-status-success-icon); font-weight:var(--ksv-ds-font-weight-bold);">
-                    ₹${Number(ch.tax_amount).toLocaleString('en-IN')}
+                    ${formatInr(ch.tax_amount)}
                   </td>
-                  <td><strong>₹${Number(ch.total_challan_amount || ch.tax_amount).toLocaleString('en-IN')}</strong></td>
+                  <td><strong>${formatInr(ch.total_challan_amount || ch.tax_amount)}</strong></td>
                   <td class="font-mono">${escapeHtml(ch.bsr_code)}</td>
                   <td>${escapeHtml(ch.date_of_deposit)}</td>
                   <td class="font-mono">${escapeHtml(String(ch.challan_serial_number))}</td>
@@ -79,16 +76,6 @@ export class AisTaxPaymentCard extends HTMLElement {
       `}
     `;
   }
-}
-
-function escapeHtml(str: string | null | undefined): string {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
 }
 
 if (!customElements.get('ais-tax-payment-card')) {
