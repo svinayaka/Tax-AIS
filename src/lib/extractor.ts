@@ -34,16 +34,16 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
   const entities = extractEntities(cleanedText);
 
   // 3. Extract Key-Value Pairs
-  const keyValues = extractKeyValuePairs(lines, docClassification.type);
+  const keyValues = extractKeyValuePairs(lines);
 
   // 4. Extract Structured Tables / Line Items
-  const tables = extractTables(cleanedText, docClassification.type);
+  const tables = extractTables(cleanedText);
 
   // 5. Extract Hierarchical Sections
   const sections = extractSections(cleanedText);
 
   // 6. Generate Executive Summary
-  const summary = generateSummary(cleanedText, docClassification, keyValues, entities);
+  const summary = generateSummary(docClassification, keyValues, entities);
 
   // 7. Process Custom Fields if user requested any
   const customFieldResults: Record<string, string> = {};
@@ -199,7 +199,7 @@ function classifyDocument(text: string): DocumentClassification {
 /**
  * Extract Core Entities (Dates, Amounts, Emails, Phones, URLs, IDs, Orgs)
  */
-function extractEntities(text: string) {
+function extractEntities(text: string): StructuredExtractionResult['entities'] {
   const entities: StructuredExtractionResult['entities'] = {
     emails: [],
     phones: [],
@@ -211,7 +211,7 @@ function extractEntities(text: string) {
   };
 
   // 1. Emails
-  const emailRegex = /([a-zA-Z\d._%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,})/g;
+  const emailRegex = /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g;
   const emailMatches = [...text.matchAll(emailRegex)];
   entities.emails = [...new Set(emailMatches.map(m => m[1]))];
 
@@ -221,7 +221,7 @@ function extractEntities(text: string) {
   entities.phones = [...new Set(phoneMatches.map(m => m[0].trim()))];
 
   // 3. URLs
-  const urlRegex = /(https?:\/\/\S+|www\.[a-z\d.-]+\.[a-z]{2,}\S*|linkedin\.com\/in\/\S+|github\.com\/\S+)/gi;
+  const urlRegex = /(https?:\/\/\S+|www\.[a-z0-9.-]+\.[a-z]{2,}\S*|linkedin\.com\/in\/\S+|github\.com\/\S+)/gi;
   const urlMatches = [...text.matchAll(urlRegex)];
   entities.urls = [...new Set(urlMatches.map(m => m[0].replace(/[,.]$/, '')))];
 
@@ -237,12 +237,12 @@ function extractEntities(text: string) {
 
   // 6. Identifiers (Invoice #, PO #, Tax ID, MRN, CIK)
   const idPatterns = [
-    { label: 'Invoice #', regex: /(?:Invoice(?:\s+Number|\s+#)?|INV#?)\s*[:#]?\s*([A-Z\d-]+)/i },
-    { label: 'PO #', regex: /(?:PO(?:\s+Number|\s+#)?|Purchase\s+Order)\s*[:#]?\s*([A-Z\d-]+)/i },
-    { label: 'Tax ID / VAT', regex: /(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*[:#]?\s*([A-Z\d-]+)/i },
-    { label: 'MRN', regex: /(?:MRN|Medical\s+Record\s+#?)\s*[:#]?\s*([A-Z\d-]+)/i },
-    { label: 'Account #', regex: /(?:Account(?:\s+Number|\s+#)?|ACT#?)\s*[:#]?\s*([A-Z\d-]+)/i },
-    { label: 'Report ID', regex: /(?:Report\s+ID|Lab\s+ID)\s*[:#]?\s*([A-Z\d-]+)/i },
+    { label: 'Invoice #', regex: /(?:Invoice(?:\s+Number|\s+#)?|INV#?)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'PO #', regex: /(?:PO(?:\s+Number|\s+#)?|Purchase\s+Order)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Tax ID / VAT', regex: /(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'MRN', regex: /(?:MRN|Medical\s+Record\s+#?)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Account #', regex: /(?:Account(?:\s+Number|\s+#)?|ACT#?)\s*[:#]?\s*([a-z0-9-]+)/i },
+    { label: 'Report ID', regex: /(?:Report\s+ID|Lab\s+ID)\s*[:#]?\s*([a-z0-9-]+)/i },
     { label: 'SEC CIK', regex: /(?:SEC\s+CIK|CIK)\s*[:#]?\s*(\d+)/i }
   ];
 
@@ -262,10 +262,9 @@ function extractEntities(text: string) {
 /**
  * Extract Key-Value pairs based on pattern heuristics
  */
-function extractKeyValuePairs(lines: string[], _docType: string): KeyValuePair[] {
+function extractKeyValuePairs(lines: string[]): KeyValuePair[] {
   const kvPairs: KeyValuePair[] = [];
-
-  const genericDelimRegex = /^([A-Za-z0-9\s()/#_.-]{2,40})\s*[:=]\s*(.+)$/;
+  const genericDelimRegex = /^([a-zA-Z0-9\s()/#_.-]{2,40})\s*[:=]\s*(.+)$/;
 
   lines.forEach(line => {
     if (line.length > 180 || line.includes('|') || line.startsWith('#')) return;
@@ -322,7 +321,7 @@ function groupKeyValuesByCategory(kvs: KeyValuePair[]): Record<string, KeyValueP
 /**
  * Extract Pipe-delimited or Structured Tabular Data
  */
-function extractTables(text: string, _docType: string): ExtractedTable[] {
+function extractTables(text: string): ExtractedTable[] {
   const tables: ExtractedTable[] = [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
@@ -383,7 +382,7 @@ function extractSections(text: string): DocumentSection[] {
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    if (/^(Part\s+[A-Z0-9]+|Section\s+\d+|[A-Z\s]{4,30}:?$)/.test(trimmed) && trimmed.length < 50 && !trimmed.includes('|')) {
+    if (/^(?:Part\s+[a-z0-9]+|Section\s+\d+|[a-z\s]{4,30}:?$)/i.test(trimmed) && trimmed.length < 50 && !trimmed.includes('|')) {
       if (currentContent.length > 0) {
         sections.push({ title: currentTitle, content: currentContent });
       }
@@ -404,7 +403,11 @@ function extractSections(text: string): DocumentSection[] {
 /**
  * Generate Summary based on extracted metadata
  */
-function generateSummary(text: string, docClassification: DocumentClassification, keyValues: KeyValuePair[], entities: StructuredExtractionResult['entities']) {
+function generateSummary(
+  docClassification: DocumentClassification,
+  keyValues: KeyValuePair[],
+  entities: StructuredExtractionResult['entities']
+) {
   let overview = `Extracted ${docClassification.label} containing ${keyValues.length} key fields, ${entities.monetaryAmounts.length} monetary figures, and ${entities.dates.length} timeline milestones.`;
 
   if (docClassification.type === 'ais') {
@@ -457,52 +460,51 @@ function parseNum(val: unknown): number {
 }
 
 function extractTaxYear(text: string): string {
-  const tyMatch = text.match(/(?:Tax\s+Year\s*\(T\.Y\.\)|Assessment\s+Year|AY|Tax\s+Year)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ||
-                  text.match(/(?:Financial\s+Year|FY)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ||
-                  text.match(/(\d{4}-\d{2})/);
+  const tyMatch = text.match(/(?:Tax\s+Year\s*\(T\.Y\.\)|Assessment\s+Year|AY|Tax\s+Year)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ??
+                  text.match(/(?:Financial\s+Year|FY)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ??
+                  text.match(/\b(\d{4}-\d{2})\b/);
   return tyMatch ? tyMatch[1].trim() : '2026-27';
 }
 
 function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
-  const panMatch = text.match(/\b([A-Z]{5}\d{4}[A-Z])\b/i) || 
-                   text.match(/(?:Permanent\s+Account\s+Number\s*\(PAN\)|PAN)\s*[:=-]?\s*([A-Z]{5}\d{4}[A-Z])/i);
-  const pan = panMatch ? panMatch[1].toUpperCase() : 'ANRPV2797D';
+  const panMatch = text.match(/\b([a-z]{5}\d{4}[a-z])\b/i) ?? 
+                   text.match(/(?:Permanent\s+Account\s+Number\s*\(PAN\)|PAN)\s*[:=-]?\s*([a-z]{5}\d{4}[a-z])/i);
+  const pan = panMatch ? panMatch[1].toUpperCase() : '';
 
-  const aadhaarMatch = text.match(/(?:Aadhaar\s+Number|Aadhaar)\s*[:=-]?\s*([X\d]{4}\s+[X\d]{4}\s+\d{4})/i) ||
-                       text.match(/\b([X\d]{4}\s+[X\d]{4}\s+\d{4})\b/i);
-  const aadhaar = aadhaarMatch ? aadhaarMatch[1].trim() : 'XXXX XXXX 2537';
+  const aadhaarMatch = text.match(/(?:Aadhaar\s+Number|Aadhaar)\s*[:=-]?\s*([x0-9]{4}\s+[x0-9]{4}\s+\d{4})/i) ??
+                       text.match(/\b([x0-9]{4}\s+[x0-9]{4}\s+\d{4})\b/i);
+  const aadhaar = aadhaarMatch ? aadhaarMatch[1].trim() : '';
 
   let name = '';
-  const nameLabelMatch = text.match(/Name\s+of\s+Assessee\s*[:=-]?\s*([A-Z\s.]+?)(?:Date\s+of\s+Birth|Mobile|E-mail|Address|\n|$)/i);
-  if (nameLabelMatch && nameLabelMatch[1].trim().length > 2 && !nameLabelMatch[1].includes('Aadhaar')) {
+  const nameLabelMatch = text.match(/Name\s+of\s+Assessee\s*[:=-]?\s*([a-z\s.]+?)(?:Date\s+of\s+Birth|Mobile|E-mail|Address|\n|$)/i);
+  if (nameLabelMatch && nameLabelMatch[1].trim().length > 2 && !nameLabelMatch[1].toLowerCase().includes('aadhaar')) {
     name = nameLabelMatch[1].trim();
   } else {
-    const seqMatch = text.match(/[A-Z]{5}\d{4}[A-Z]\s+[X\d\s]{12,14}\s+([A-Z\s]{3,40}?)(?=\s+Date\s+of\s+Birth|\s+\d{2}\/\d{2}\/\d{4}|\s+\d{10})/i);
+    const seqMatch = text.match(/[a-z]{5}\d{4}[a-z]\s+[x0-9\s]{12,14}\s+([a-z\s]{3,40}?)(?=\s+Date\s+of\s+Birth|\s+\d{2}\/\d{2}\/\d{4}|\s+\d{10})/i);
     if (seqMatch) name = seqMatch[1].trim();
   }
   if (!name) {
-    const afterAadhaar = text.match(/XXXX\s+XXXX\s+\d{4}\s+([A-Z\s]{3,35})/i);
+    const afterAadhaar = text.match(/xxxx\s+xxxx\s+\d{4}\s+([a-z\s]{3,35})/i);
     if (afterAadhaar) name = afterAadhaar[1].trim();
   }
-  const nameOfAssessee = name || 'SIDDI VINAYAKA';
+  const nameOfAssessee = name || '';
 
-  const dobMatch = text.match(/(?:Date\s+of\s+Birth|DOB)\s*[:=-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) ||
+  const dobMatch = text.match(/(?:Date\s+of\s+Birth|DOB)\s*[:=-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i) ??
                    text.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
-  const dateOfBirth = dobMatch ? dobMatch[1].trim() : '29/07/1988';
+  const dateOfBirth = dobMatch ? dobMatch[1].trim() : '';
 
-  const mobileMatch = text.match(/(?:Mobile\s+Number|Mobile|Phone)\s*[:=-]?\s*([6-9]\d{9})/i) ||
+  const mobileMatch = text.match(/(?:Mobile\s+Number|Mobile|Phone)\s*[:=-]?\s*([6-9]\d{9})/i) ??
                       text.match(/\b([6-9]\d{9})\b/);
-  const mobileNumber = mobileMatch ? mobileMatch[1].trim() : '9480559739';
+  const mobileNumber = mobileMatch ? mobileMatch[1].trim() : '';
 
-  const emailMatch = text.match(/([a-zA-Z\d._%+-]+@[a-zA-Z\d.-]+\.[a-zA-Z]{2,})/);
-  const emailAddress = emailMatch ? emailMatch[1].trim() : 'svinayaka290489@gmail.com';
+  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const emailAddress = emailMatch ? emailMatch[1].trim() : '';
 
   let address = '';
-  const addrMatch = text.match(/Address\s*[:=-]?\s*([A-Z\d\s,./-]+?)(?=-{5,}|Annual\s+Information\s+Statement|Part\s+B|\n\s*\n|$)/i);
+  const addrMatch = text.match(/Address\s*[:=-]?\s*([a-z0-9\s,./-]+?)(?=-{5,}|Annual\s+Information\s+Statement|Part\s+B|\n\s*\n|$)/i);
   if (addrMatch) {
     address = addrMatch[1].replace(/[-_]{5,}/g, '').trim();
   }
-  const fullAddress = address || 'NO-189/46, 1ST FLOOR, JAMBUSAVARI DINNE, BANNERGHATTA ROAD S.O, BANGALORE SOUTH, BANGALORE, KARNATAKA';
 
   return {
     name_of_assessee: nameOfAssessee,
@@ -511,7 +513,7 @@ function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
     date_of_birth: dateOfBirth,
     mobile_number: mobileNumber,
     email_address: emailAddress,
-    address: fullAddress
+    address
   };
 }
 
@@ -552,7 +554,7 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
   });
 
   // Extract Deductor Entities
-  const deductorRegex = /(\d+)\s*\|\s*(TDS-[^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+(?:\([A-Z\d]+\))?)\s*\|\s*(\d+)\s*\|\s*([\d,.]+)/g;
+  const deductorRegex = /(\d+)\s*\|\s*(TDS-[^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+(?:\([a-z0-9]+\))?)\s*\|\s*(\d+)\s*\|\s*([\d,.]+)/gi;
   let dedMatch: RegExpExecArray | null;
 
   while ((dedMatch = deductorRegex.exec(text)) !== null) {
@@ -569,36 +571,6 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
     });
   }
 
-  // Fallback if deductors weren't captured via pipe regex
-  if (partB1.length === 0) {
-    partB1.push(
-      {
-        sr_no: 1,
-        information_code: 'TDS-194A',
-        information_description: 'Interest from others (Sec 194A)',
-        information_source: 'AKARA CAPITAL ADVISORS PRIVATE LIMITED (DELA43380B)',
-        total_amount_credited: 523,
-        line_items: [
-          { sr_no: 1, quarter: 'Q1(Apr-Jun)', date_of_payment: '19/06/2026', amount_paid_credited: 204, tds_deducted: 20, tds_deposited: 20, status: 'Active' },
-          { sr_no: 2, quarter: 'Q1(Apr-Jun)', date_of_payment: '20/05/2026', amount_paid_credited: 197, tds_deducted: 20, tds_deposited: 20, status: 'Active' },
-          { sr_no: 3, quarter: 'Q1(Apr-Jun)', date_of_payment: '20/04/2026', amount_paid_credited: 122, tds_deducted: 12, tds_deposited: 12, status: 'Active' }
-        ]
-      },
-      {
-        sr_no: 2,
-        information_code: 'TDS-194A',
-        information_description: 'Interest from others (Sec 194A)',
-        information_source: 'KEERTANA FINSERV LIMITED (CALR17935B)',
-        total_amount_credited: 288,
-        line_items: [
-          { sr_no: 1, quarter: 'Q1(Apr-Jun)', date_of_payment: '09/06/2026', amount_paid_credited: 97, tds_deducted: 10, tds_deposited: 10, status: 'Active' },
-          { sr_no: 2, quarter: 'Q1(Apr-Jun)', date_of_payment: '09/05/2026', amount_paid_credited: 94, tds_deducted: 9, tds_deposited: 9, status: 'Active' },
-          { sr_no: 3, quarter: 'Q1(Apr-Jun)', date_of_payment: '09/04/2026', amount_paid_credited: 97, tds_deducted: 10, tds_deposited: 10, status: 'Active' }
-        ]
-      }
-    );
-  }
-
   return partB1;
 }
 
@@ -607,26 +579,26 @@ function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayme
 
   // Pipe table parsing
   lines.forEach(line => {
-    if (line.includes('|') && (line.includes('Income Tax') || line.includes('Self Assessment') || /\d{7}/.test(line))) {
+    if (line.includes('|') && (line.toLowerCase().includes('income tax') || line.toLowerCase().includes('self assessment') || /\d{7}/.test(line))) {
       const parts = line.split('|').map(p => p.trim());
       if (parts.length >= 8 && !parts[0].toLowerCase().includes('sr')) {
         partB3.push({
-          financial_year: parts[1] || '2025-26',
-          major_head: parts[2] || 'Income Tax (Other than Companies)',
+          financial_year: parts[1] || '',
+          major_head: parts[2] || 'Income Tax',
           minor_head: parts[3] || 'Self Assessment',
           tax_amount: parseNum(parts[4]),
           total_challan_amount: parseNum(parts[8] || parts[4]),
-          bsr_code: parts[9] || '0180002',
-          date_of_deposit: parts[10] || '31/07/2026',
-          challan_serial_number: parseInt(parts[11], 10) || 27897
+          bsr_code: parts[9] || '',
+          date_of_deposit: parts[10] || '',
+          challan_serial_number: parseInt(parts[11], 10) || 0
         });
       }
     }
   });
 
-  // Regex fallback for challan records
+  // Regex fallback for challan records (bounded non-greedy match)
   if (partB3.length === 0) {
-    const challanRegex = /(\d{4}-\d{2})\s+([a-z\s()]+)\s+(Self\s+Assessment|Advance\s+Tax|Regular\s+Assessment)\s+([\d,.]+)\s+.*?(\d{7})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)/gi;
+    const challanRegex = /(\d{4}-\d{2})\s+([a-z\s()]+)\s+(Self\s+Assessment|Advance\s+Tax|Regular\s+Assessment)\s+([\d,.]+)[^\n\r]{0,80}?(\d{7})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)/gi;
     let chMatch: RegExpExecArray | null;
     while ((chMatch = challanRegex.exec(text)) !== null) {
       partB3.push({
@@ -640,19 +612,6 @@ function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayme
         challan_serial_number: parseInt(chMatch[7], 10)
       });
     }
-  }
-
-  if (partB3.length === 0 && text.toLowerCase().includes('2,003')) {
-    partB3.push({
-      financial_year: '2025-26',
-      major_head: 'Income Tax (Other than Companies)',
-      minor_head: 'Self Assessment',
-      tax_amount: 2003,
-      total_challan_amount: 2003,
-      bsr_code: '0180002',
-      date_of_deposit: '31/07/2026',
-      challan_serial_number: 27897
-    });
   }
 
   return partB3;

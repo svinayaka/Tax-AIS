@@ -139,7 +139,15 @@ Code quality and security analysis are strictly enforced on every commit using *
 2. **ESLint with SonarJS & TypeScript**:
    - Implemented via `eslint-plugin-sonarjs` and `@typescript-eslint` in [`eslint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/eslint.config.js).
    - Enforces **Cognitive Complexity &le; 30**, dead code detection, redundant type aliases, duplicate branch detection, security hotspot checking, and clean modular logic.
-3. **Stylelint Standards**:
+3. **Regular Expression & Pattern Safety Rules**:
+   - **Case-Insensitivity (`/i` flag)**: When `/i` is specified, always use lowercase character classes (e.g., `[a-z0-9-]`) instead of `[A-Z]` or `[A-Za-z]` to prevent `sonarjs/duplicates-in-character-class` violations.
+   - **No Duplicates in Character Classes**: Never duplicate characters or specify overlapping character ranges inside `[...]` (e.g., `[a-zA-Z0-9._%+-]`).
+   - **Prevent ReDoS (Catastrophic Backtracking)**: Avoid unbounded lazy quantifiers (`.*?`) between match groups. Use bounded negated character classes (`[^|\n\r]+`) or bounded lengths (`[^\n\r]{0,80}?`).
+   - **Email & Token Regexes**: Use standard bounded delimiters with word boundaries (e.g., `/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/`).
+4. **Extraction Integrity & Zero Mock Fallbacks**:
+   - Parsing engines (`src/lib/extractor.ts`) must extract document content dynamically.
+   - **Never inject hardcoded dummy names, mock deductor entities, or dummy challans** as fallbacks when document sections are empty or unparsed. Always return clean empty defaults (`''`, `[]`, `0`).
+5. **Stylelint Standards**:
    - Implemented via [`stylelint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/.stylelintrc.json) extending `stylelint-config-standard`.
    - Validates all CSS against modern syntax standards and prevents style regressions.
 
@@ -207,7 +215,8 @@ npm run preview
 ## 9. Mandatory Instructions for Contributing AI Agents
 
 1. **Mandatory Quality Gate**: Run `npm run sonar:check` and `npm run build` before committing any changes. Both commands MUST pass with **0 errors**.
-2. **Zero SonarQube Smells**: Do not introduce nested ternary operators, redundant assignments, excessive cognitive complexity (> 30), or unhandled edge cases.
-3. **Strict CSS Tokens**: Use `@svinayaka/siddi-design-system` tokens (`--ksv-ds-*`) exclusively. Never add hardcoded hex values in component templates.
-4. **Responsive Layouts**: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.
-5. **Theme Support**: Ensure both Light and Dark modes remain crisp, legible, and compliant with accessibility contrast ratios.
+2. **Zero SonarQube Smells**: Do not introduce nested ternary operators, redundant assignments, regex duplicate character classes, unbounded wildcards (`.*?`), excessive cognitive complexity (> 30), or unhandled edge cases.
+3. **Zero Mock Fallbacks**: Never return hardcoded mock data when parsing fails; return empty arrays or empty strings.
+4. **Strict CSS Tokens**: Use `@svinayaka/siddi-design-system` tokens (`--ksv-ds-*`) exclusively. Never add hardcoded hex values in component templates.
+5. **Responsive Layouts**: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.
+6. **Theme Support**: Ensure both Light and Dark modes remain crisp, legible, and compliant with accessibility contrast ratios.
