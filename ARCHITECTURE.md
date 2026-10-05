@@ -1,4 +1,4 @@
-# Architecture Documentation — Tax-AIS
+# System Architecture — Tax-AIS
 
 > **System:** Indian Income Tax Annual Information Statement (AIS / Form 168) Extraction Engine & Visual Dashboard  
 > **Repository:** [https://github.com/svinayaka/Tax-AIS.git](https://github.com/svinayaka/Tax-AIS.git)  
@@ -77,7 +77,7 @@ Tax-AIS/
 ├── .eslintrc.js              # ESLint configuration with SonarJS rules
 ├── .lintstagedrc.json        # Staged files linter & type-check orchestrator
 ├── .stylelintrc.json         # Stylelint configuration extending standard CSS rules
-├── AGENTS.md                 # Developer & AI Agent contribution standards
+├── AGENTS.md                 # Developer & AI Agent contribution guidelines
 ├── ARCHITECTURE.md           # System architecture documentation
 ├── index.html                # Single-page application shell
 ├── package.json              # Project dependencies, scripts, and quality gates
@@ -115,13 +115,13 @@ export interface TextItem {
 The extraction engine takes raw space-delimited PDF streams, pipe-delimited text, or CSV files and produces a typed `StructuredExtractionResult` and `AisDeveloperSchema`:
 
 1. **Document Classifier**: Clustered keyword scoring categorizes documents (AIS / Form 168, Form 26AS, Invoices, Financial Statements).
-2. **Entity Tokenizer**: Regex tokenizers extract PAN (`[A-Z]{5}[0-9]{4}[A-Z]`), Aadhaar (`XXXX XXXX \d{4}`), mobile numbers, emails, monetary values, and dates.
+2. **Entity Tokenizer**: Regex tokenizers extract PAN (`[a-z]{5}[0-9]{4}[a-z]`), Aadhaar (`XXXX XXXX \d{4}`), mobile numbers, emails, monetary values, and dates.
 3. **Part A (Assessee Profile)**: Extracts PAN, masked Aadhaar, legal name, DOB, phone, email, and multi-line residential address.
 4. **Part B1 (TDS/TCS Deductors & Quarterly Line Items)**:
    - **3-Stage Resolution**:
      - *Stage 1*: Pipe/CSV-delimited tables.
      - *Stage 2*: PDF space-delimited text streams matching information code (`TDS-393(1)[Table: ...]`), description, deductor name, TAN, count, and amount.
-     - *Stage 3*: TAN pattern heuristic (`\([A-Z]{4}\d{5}[A-Z]\)`) to dynamically discover and group line items without hardcoded entity names.
+     - *Stage 3*: TAN pattern heuristic (`\([a-z]{4}\d{5}[a-z]\)`) to dynamically discover and group line items without hardcoded entity names.
 5. **Part B3 (Tax Payments / Challans)**:
    - Parses Financial Year (`YYYY-YY`), major head (`Income Tax`), minor head (`Self Assessment`, `Advance Tax`), 7-digit BSR code (`0180002`), deposit date, Challan Serial Number (`27897`), and CIN.
 
@@ -196,75 +196,15 @@ export interface AisDeveloperSchema {
 
 ---
 
-## 5. Design System Integration (`@svinayaka/siddi-design-system`)
+## 5. Design System Architecture (`@svinayaka/siddi-design-system`)
 
-All UI styling, cards, tables, modals, and buttons use `@svinayaka/siddi-design-system` design tokens:
+The user interface adheres to token-based design principles provided by `@svinayaka/siddi-design-system`:
 
-### Token Categories
-- **Surfaces & Canvases**: `var(--ksv-ds-bg-canvas)`, `var(--ksv-ds-bg-surface)`, `var(--ksv-ds-bg-surface-elevated)`, `var(--ksv-ds-bg-glass-card)`
-- **Typography & Text**: `var(--ksv-ds-text-primary)`, `var(--ksv-ds-text-secondary)`, `var(--ksv-ds-text-tertiary)`, `var(--ksv-ds-text-brand)`
-- **Status Tokens**:
-  - Success: `var(--ksv-ds-status-success-bg)`, `var(--ksv-ds-status-success-text)`, `var(--ksv-ds-status-success-icon)`
-  - Warning: `var(--ksv-ds-status-warning-bg)`, `var(--ksv-ds-status-warning-text)`, `var(--ksv-ds-status-warning-icon)`
-  - Danger: `var(--ksv-ds-status-danger-bg)`, `var(--ksv-ds-status-danger-text)`, `var(--ksv-ds-status-danger-icon)`
-  - Info: `var(--ksv-ds-status-info-bg)`, `var(--ksv-ds-status-info-text)`, `var(--ksv-ds-status-info-icon)`
-- **Theme Synchronization**: Theme manager toggles both `data-theme` and `data-ksv-ds-theme` attributes on `document.documentElement` (`"dark"` or `"light"`).
+- **Design Tokens**: Standardized CSS variables (`--ksv-ds-*`) manage all background surfaces, text hierarchies, border radiuses, and semantic status indicators (success, warning, danger, info).
+- **Theme Synchronization**: Theme switching updates both `data-theme` and `data-ksv-ds-theme` root DOM attributes, enabling instant light/dark mode transitions without re-rendering components.
 
 ---
 
-## 6. Code Quality, SonarQube & Pre-Commit Quality Gates
+## 6. Code Governance & Development Standards
 
-The codebase enforces strict quality gates on every Git commit via **Husky**, **lint-staged**, **ESLint with SonarJS**, **Stylelint**, and the **TypeScript compiler**:
-
-```
-+-------------------------------------------------------------+
-|                     git commit triggered                    |
-+-------------------------------------------------------------+
-                               |
-                               v
-   [Step 1] npx lint-staged (Auto-fix & validate staged files)
-                               |
-                               v
-   [Step 2] tsc --noEmit (Strict TypeScript type-check)
-                               |
-                               v
-   [Step 3] npm run sonar:check (Full SonarJS, Stylelint & TS check)
-                               |
-                               v
-                  Commit Allowed or Rejected
-```
-
-### SonarJS Rules Enforced
-1. **Regular Expression Safety**:
-   - Case-insensitive flags (`/i` or `/gi`) require normalized lowercase character classes (`[a-z0-9]`) to avoid `sonarjs/duplicates-in-character-class`.
-   - Prevent ReDoS / catastrophic backtracking (`sonarjs/slow-regex`) with bounded quantifiers.
-2. **Cognitive Complexity**: Modules maintain Cognitive Complexity $\le 30$.
-3. **Dead Store & Unused Code**: Elimination of redundant variable assignments and unused branches.
-4. **Extraction Integrity**: Zero mock fallback injection—parsers must dynamically extract data or return clean empty sets.
-
----
-
-## 7. Verification & Build Commands
-
-```bash
-# Start local development server (Vite)
-npm run dev
-
-# Run full SonarQube, Stylelint & TypeScript quality check
-npm run sonar:check
-
-# Run SonarScanner analysis
-npm run sonar:scan
-
-# Run ESLint & SonarJS checks
-npm run lint
-
-# Run Stylelint CSS checks
-npm run stylelint
-
-# Build production bundle
-npm run build
-
-# Preview production build
-npm run preview
-```
+For developer workflows, AI agent contribution guidelines, SonarQube rule specifications, and pre-commit hook configurations, refer to **[`AGENTS.md`](file:///Users/siddhivinayaka/Documents/Learning/ais/AGENTS.md)**.
