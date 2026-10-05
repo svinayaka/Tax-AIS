@@ -6,6 +6,9 @@ import { extractStructuredData } from './lib/extractor.js';
 import { SAMPLE_DOCUMENTS } from './lib/sample-data.js';
 import { exportToJson, exportToCsv, exportToMarkdown, downloadFile } from './lib/exporter.js';
 
+// Import Siddi-compliant Stencil / Web Components
+import './components/index.js';
+
 // ==========================================================================
 // Application State
 // ==========================================================================
@@ -310,70 +313,9 @@ function renderAisDashboard(ais) {
           </span>
         </div>
 
-      <!-- PART A: General Information -->
-      <div class="ais-part-section">
-        <div class="ais-part-header">
-          <div class="ais-part-title-wrap">
-            <i data-lucide="user-check" class="ais-part-icon"></i>
-            <h3 class="ais-part-title" style="color:var(--ksv-ds-text-brand); font-size:1.15rem; font-weight:700;">Part A - General Information</h3>
-          </div>
-          <span class="meta-pill">Tax Year (T.Y.): ${escapeHtml(ais.tax_year || '2026-27')}</span>
-        </div>
+      <!-- PART A: General Information Web Component -->
+      <ais-part-a tax-year="${escapeHtml(ais.tax_year || '2026-27')}"></ais-part-a>
 
-        <div class="ais-grid-general">
-          <!-- Row 1: PAN, Aadhaar, Name -->
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">Permanent Account Number (PAN)</span>
-            <div class="ais-gen-value font-mono">
-              ${escapeHtml(partA.pan || '—')}
-            </div>
-          </div>
-
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">Aadhaar Number</span>
-            <div class="ais-gen-value font-mono">
-              ${escapeHtml(partA.aadhaar || '—')}
-            </div>
-          </div>
-
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">Name of Assessee</span>
-            <div class="ais-gen-value">
-              ${escapeHtml(partA.name_of_assessee || '—')}
-            </div>
-          </div>
-
-          <!-- Row 2: DOB, Mobile, Email -->
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">Date of Birth</span>
-            <div class="ais-gen-value">
-              ${escapeHtml(partA.date_of_birth || '—')}
-            </div>
-          </div>
-
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">Mobile Number</span>
-            <div class="ais-gen-value font-mono">
-              ${escapeHtml(partA.mobile_number || '—')}
-            </div>
-          </div>
-
-          <div class="ais-gen-card">
-            <span class="ais-gen-label">E-mail Address</span>
-            <div class="ais-gen-value font-mono" style="font-size:0.875rem;">
-              ${escapeHtml(partA.email_address || '—')}
-            </div>
-          </div>
-
-          <!-- Row 3: Address (Full Width) -->
-          <div class="ais-gen-card" style="grid-column: 1 / -1;">
-            <span class="ais-gen-label">Address</span>
-            <div class="ais-gen-value" style="font-weight:600; line-height:1.5;">
-              ${escapeHtml(partA.address || '—')}
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- PART B1: TDS / TCS Transactions -->
       <div class="ais-part-section">
@@ -492,69 +434,9 @@ function renderAisDashboard(ais) {
         `}
       </div>
 
-      <!-- PART B3: Payment of Taxes -->
-      <div class="ais-part-section">
-        <div class="ais-part-header">
-          <div class="ais-part-title-wrap">
-            <i data-lucide="landmark" class="ais-part-icon" style="color:var(--color-emerald);"></i>
-            <h3 class="ais-part-title">Part B3 — Information Relating to Payment of Taxes (Challans)</h3>
-          </div>
-          <span class="meta-pill">${partB3.length} Challan(s)</span>
-        </div>
+      <!-- PART B3: Payment of Taxes Web Component -->
+      <ais-tax-payment-card></ais-tax-payment-card>
 
-        ${partB3.length > 0 ? `
-          <div class="ais-challan-grid">
-            ${partB3.map((ch) => `
-              <div class="ais-challan-card">
-                <div class="ais-challan-row">
-                  <div>
-                    <span class="ais-gen-label">Financial Year</span>
-                    <div class="ais-gen-value">${escapeHtml(ch.financial_year)}</div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Major Head</span>
-                    <div class="ais-gen-value">${escapeHtml(ch.major_head)}</div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Minor Head</span>
-                    <div class="ais-gen-value"><span class="meta-pill">${escapeHtml(ch.minor_head)}</span></div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Tax Paid</span>
-                    <div class="ais-gen-value" style="color:var(--ksv-ds-status-success-icon); font-size:1.1rem; font-weight:800;">
-                      ₹${Number(ch.tax_amount).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                </div>
-
-                <div class="ais-challan-row" style="padding-top: var(--ksv-ds-space-3); border-top: 1px dashed var(--ksv-ds-border-subtle);">
-                  <div>
-                    <span class="ais-gen-label">BSR Code</span>
-                    <div class="ais-gen-value"><code>${escapeHtml(ch.bsr_code)}</code></div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Date of Deposit</span>
-                    <div class="ais-gen-value">${escapeHtml(ch.date_of_deposit)}</div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Challan Serial No</span>
-                    <div class="ais-gen-value"><code>${escapeHtml(String(ch.challan_serial_number))}</code></div>
-                  </div>
-                  <div>
-                    <span class="ais-gen-label">Challan Total</span>
-                    <div class="ais-gen-value"><strong>₹${Number(ch.total_challan_amount).toLocaleString('en-IN')}</strong></div>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        ` : `
-          <div class="ais-empty-part">
-            <i data-lucide="info" class="btn-icon-sm"></i>
-            <span>No Tax Payments or Challans recorded for this period.</span>
-          </div>
-        `}
-      </div>
 
       <!-- PART B4: Demand and Refund -->
       <div class="ais-part-section">
@@ -601,6 +483,14 @@ function renderAisDashboard(ais) {
   `;
 
   container.innerHTML = html;
+
+  // Set reactive properties on custom elements
+  const partAComp = container.querySelector('ais-part-a');
+  if (partAComp) partAComp.data = partA;
+
+  const taxPayComp = container.querySelector('ais-tax-payment-card');
+  if (taxPayComp) taxPayComp.payments = partB3;
+
   refreshIcons();
 }
 
