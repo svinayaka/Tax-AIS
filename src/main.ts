@@ -3,7 +3,6 @@ import confetti from 'canvas-confetti';
 
 import { parsePdfDocument, renderPageToCanvas, type PdfDocumentLike } from './lib/pdf-parser';
 import { extractStructuredData } from './lib/extractor';
-import { SAMPLE_DOCUMENTS } from './lib/sample-data';
 import { escapeHtml, formatInr } from './lib/dom-utils';
 
 // Import Siddi-compliant Stencil / Web Components
@@ -299,46 +298,6 @@ async function handleFileUpload(file: File): Promise<void> {
   }
 }
 
-// Sample Loader for Testing
-async function loadSampleAis(): Promise<void> {
-  const overlay = document.getElementById('uploadProgressOverlay');
-  const fill = document.getElementById('progressBarFill');
-  const title = document.getElementById('progressStatusTitle');
-  const detail = document.getElementById('progressStatusDetail');
-
-  if (overlay) overlay.classList.remove('hidden');
-  if (fill) fill.style.width = '30%';
-  if (title) title.textContent = 'Loading Reference AIS File...';
-  if (detail) detail.textContent = 'Extracting Part A & Part B...';
-
-  try {
-    const response = await fetch('/src/assets/XXXPV2797X_2026-27_AIS_unlocked.pdf');
-    if (response.ok) {
-      const blob = await response.blob();
-      const file = new File([blob], 'XXXPV2797X_2026-27_AIS_unlocked.pdf', { type: 'application/pdf' });
-      await handleFileUpload(file);
-      return;
-    }
-  } catch (e) {
-    console.warn('Direct asset fetch fallback:', e);
-  }
-
-  // Fallback to sample text
-  const sample = SAMPLE_DOCUMENTS.find(s => s.id === 'ais') || SAMPLE_DOCUMENTS[0];
-  state.currentFile = { name: 'AIS_Reference_2026-27.txt', type: 'text/plain' };
-  state.rawText = sample.rawText;
-  state.pdfDoc = null;
-  state.totalPages = 1;
-  state.currentPageNum = 1;
-  state.structuredData = extractStructuredData(sample.rawText);
-
-  renderAllViews();
-  setDocViewMode('text');
-  if (overlay) overlay.classList.add('hidden');
-
-  triggerConfetti();
-  showToast('Loaded Reference AIS Sample!', 'success');
-}
 
 function resetToFreshUpload(): void {
   state.currentFile = null;
@@ -705,10 +664,6 @@ function setupEventListeners(): void {
     });
   }
 
-  // 2. Reference AIS Sample Link
-  document.getElementById('loadReferenceAisBtn')?.addEventListener('click', () => {
-    loadSampleAis();
-  });
 
   // 3. Re-Upload / Reset Button
   document.getElementById('reuploadBtn')?.addEventListener('click', () => {

@@ -503,66 +503,6 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--ksv-ds-text-tertiary);
 }
 
-/* ==========================================================================
-   Sample Document Buttons Bar
-   ========================================================================== */
-.samples-bar {
-  margin-top: var(--ksv-ds-space-6);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--ksv-ds-space-3);
-}
-
-.samples-label {
-  display: flex;
-  align-items: center;
-  gap: var(--ksv-ds-space-2);
-  font-size: var(--ksv-ds-text-sm);
-  font-weight: var(--ksv-ds-font-weight-semibold);
-  color: var(--ksv-ds-text-secondary);
-}
-
-.samples-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--ksv-ds-text-brand);
-}
-
-.sample-buttons-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--ksv-ds-space-3);
-}
-
-.sample-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--ksv-ds-space-2);
-  background: var(--ksv-ds-interactive-secondary);
-  border: 1px solid var(--ksv-ds-border-subtle);
-  color: var(--ksv-ds-text-primary);
-  padding: var(--ksv-ds-space-2) var(--ksv-ds-space-4);
-  border-radius: var(--ksv-ds-radius-md);
-  font-size: var(--ksv-ds-text-xs);
-  font-weight: var(--ksv-ds-font-weight-semibold);
-  cursor: pointer;
-  transition: var(--ksv-ds-transition-fast);
-}
-
-.sample-btn:hover {
-  background: var(--ksv-ds-interactive-secondary-hover);
-  border-color: var(--ksv-ds-border-focus);
-  transform: translateY(-1px);
-  box-shadow: var(--ksv-ds-shadow-sm);
-}
-
-.sample-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--ksv-ds-text-brand);
-}
 
 /* ==========================================================================
    Results Workspace
@@ -1954,7 +1894,7 @@ h1, h2, h3, h4, h5, h6 {
     color: #000 !important;
   }
 
-  .app-header, .hero-section, .samples-bar, .doc-header-actions, .tabs-nav, .pane-toolbar, .app-footer {
+  .app-header, .hero-section, .doc-header-actions, .tabs-nav, .pane-toolbar, .app-footer {
     display: none !important;
   }
   .results-workspace { display: block !important; }
