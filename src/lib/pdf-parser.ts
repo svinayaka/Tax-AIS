@@ -48,7 +48,6 @@ export async function parsePdfDocument(
     fileSize = file.size || 0;
     arrayBuffer = await file.arrayBuffer();
   } else if (file instanceof Blob) {
-    fileName = 'document.pdf';
     fileSize = file.size || 0;
     arrayBuffer = await file.arrayBuffer();
   } else if (file instanceof ArrayBuffer) {

@@ -53,7 +53,8 @@ export function exportToCsv(structuredData: StructuredExtractionResult | null): 
   // 2. Tables
   if (structuredData.tables && structuredData.tables.length > 0) {
     structuredData.tables.forEach((tbl, idx) => {
-      parts.push(`# TABLE: ${escapeCsv(tbl.title || `Table ${idx + 1}`)}`);
+      const tableTitle = tbl.title || 'Table ' + (idx + 1);
+      parts.push(`# TABLE: ${escapeCsv(tableTitle)}`);
       parts.push(tbl.headers.map(h => `"${escapeCsv(h)}"`).join(','));
       
       tbl.rows.forEach(row => {

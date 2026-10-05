@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running Pre-Commit Checks: SonarQube / SonarJS, Stylelint, and TypeScript..."
+
+# 1. Staged files auto-fix & SonarJS/ESLint + Stylelint validation
+npx lint-staged || exit 1
+
+# 2. Strict TypeScript type check
+npx tsc --noEmit || exit 1
+
+# 3. Full project SonarQube / SonarJS + Stylelint check
+npm run sonar:check || exit 1
+
+echo "✅ All SonarQube, Stylelint, and TypeScript checks passed successfully!"

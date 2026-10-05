@@ -53,9 +53,12 @@ function showToast(message: string, type: 'info' | 'success' | 'error' = 'info',
   if (!container) return;
 
   const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  
-  const iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert-circle' : 'shield-check';
+  const iconMap: Record<string, string> = {
+    success: 'check-circle',
+    error: 'alert-circle',
+    info: 'shield-check',
+  };
+  const iconName = iconMap[type] || 'shield-check';
   toast.innerHTML = `
     <i data-lucide="${iconName}" class="toast-icon"></i>
     <span>${message}</span>

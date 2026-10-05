@@ -19,16 +19,13 @@
   --bg-card: var(--ksv-ds-bg-glass-card);
   --bg-card-hover: var(--ksv-ds-bg-surface-elevated);
   --bg-glass: var(--ksv-ds-bg-glass);
-  
   --border-subtle: var(--ksv-ds-border-subtle);
   --border-focus: var(--ksv-ds-border-focus);
   --border-strong: var(--ksv-ds-border-default);
-
   --text-primary: var(--ksv-ds-text-primary);
   --text-secondary: var(--ksv-ds-text-secondary);
   --text-muted: var(--ksv-ds-text-muted);
   --text-inverse: var(--ksv-ds-text-inverse);
-
   --accent-primary: var(--ksv-ds-interactive-primary);
   --accent-primary-hover: var(--ksv-ds-interactive-primary-hover);
   --accent-secondary: var(--ksv-ds-color-violet-500);
@@ -47,15 +44,12 @@
   --radius-lg: var(--ksv-ds-radius-xl);
   --radius-xl: var(--ksv-ds-radius-3xl);
   --radius-full: var(--ksv-ds-radius-full);
-
   --shadow-sm: var(--ksv-ds-shadow-sm);
   --shadow-md: var(--ksv-ds-shadow-md);
   --shadow-lg: var(--ksv-ds-shadow-lg);
-
   --font-sans: var(--ksv-ds-font-sans);
   --font-heading: var(--ksv-ds-font-display);
   --font-mono: var(--ksv-ds-font-mono);
-
   --transition-fast: var(--ksv-ds-transition-fast);
   --transition-normal: var(--ksv-ds-transition-normal);
 }
@@ -140,7 +134,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   box-shadow: var(--glow-accent);
-  color: #ffffff;
+  color: #fff;
 }
 
 .brand-icon {
@@ -1308,7 +1302,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .doc-view-toggle .btn.active {
   background: var(--ksv-ds-interactive-primary);
-  color: #ffffff;
+  color: #fff;
   border-color: var(--ksv-ds-interactive-primary);
 }
 
@@ -1334,7 +1328,7 @@ h1, h2, h3, h4, h5, h6 {
 .pdf-canvas {
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
   border-radius: var(--ksv-ds-radius-md);
-  background: #ffffff;
+  background: #fff;
   display: block;
   margin: 0 auto;
 }
@@ -1956,21 +1950,24 @@ h1, h2, h3, h4, h5, h6 {
    ========================================================================== */
 @media print {
   body {
-    background: #ffffff !important;
-    color: #000000 !important;
+    background: #fff !important;
+    color: #000 !important;
   }
+
   .app-header, .hero-section, .samples-bar, .doc-header-actions, .tabs-nav, .pane-toolbar, .app-footer {
     display: none !important;
   }
   .results-workspace { display: block !important; }
+
   .tab-pane {
     display: block !important;
     margin-bottom: 2rem;
   }
+
   .document-banner, .category-block, .table-wrapper-card {
     border: 1px solid #ccc !important;
     box-shadow: none !important;
-    background: #ffffff !important;
-    color: #000000 !important;
+    background: #fff !important;
+    color: #000 !important;
   }
 }

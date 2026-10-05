@@ -3,7 +3,8 @@
 > **Project:** Tax-AIS (Indian Income Tax Annual Information Statement / Form 168 Extraction Engine)  
 > **Repository:** [https://github.com/svinayaka/Tax-AIS.git](https://github.com/svinayaka/Tax-AIS.git)  
 > **Design System:** `@svinayaka/siddi-design-system@1.0.0`  
-> **Framework / Components:** Vanilla JS, Stencil / Web Components, Vite, PDF.js
+> **Language / Framework:** TypeScript (Strict), Stencil / Web Components, Vite, PDF.js  
+> **Code Quality:** SonarQube (`eslint-plugin-sonarjs`), Stylelint, Husky, lint-staged
 
 ---
 
@@ -11,13 +12,14 @@
 
 **Tax-AIS** is a specialized, privacy-first, 100% in-browser extraction engine and visual dashboard for Indian Income Tax **Annual Information Statement (AIS / Form 168)** and **Form 26AS** documents.
 
-### Key Architecture Modules
-- **`src/lib/pdf-parser.js`**: Binary PDF reader powered by Mozilla PDF.js. Handles spatial layout reconstruction, line grouping with tolerance, and encrypted PDF password callbacks (`PAN + DDMMYYYY`).
-- **`src/lib/extractor.js`**: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund).
-- **`src/lib/exporter.js`**: Multi-format exporter producing strict JSON Schema, tax filing CSV, Markdown report, and print documents.
-- **`src/components/`**: Stencil-compatible Web Component suite.
+### Key Architecture Modules (TypeScript)
+- **`src/types/ais.ts`**: Strict TypeScript interfaces and developer schema contract (`PartAGeneralInfo`, `PartB1TdsTcsTransaction`, `PartB3TaxPayment`, `AisDeveloperSchema`, `StructuredExtractionResult`).
+- **`src/lib/pdf-parser.ts`**: Binary PDF reader powered by Mozilla PDF.js. Handles spatial layout reconstruction, line grouping with tolerance, and encrypted PDF password callbacks (`PAN + DDMMYYYY`) with HiDPI Retina canvas scaling.
+- **`src/lib/extractor.ts`**: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund).
+- **`src/lib/exporter.ts`**: Multi-format exporter producing strict JSON Schema, tax filing CSV, and Markdown reports.
+- **`src/components/`**: Stencil-compatible Web Component suite (`<ais-part-a>`, `<ais-deductor-card>`, `<ais-tax-payment-card>`, `<ais-kpi-card>`).
 - **`src/style.css`**: Design tokens and styling built entirely on top of `@svinayaka/siddi-design-system`.
-- **`src/main.js`**: Application orchestrator, theme manager, and event router.
+- **`src/main.ts`**: Application orchestrator, multi-format ingestion (PDF, TXT, CSV, JSON), theme manager, and event router.
 
 ---
 
@@ -51,7 +53,7 @@ Components in `src/components/` follow Stencil / Custom Element lifecycle and co
    - Primitive configuration (such as `tax-year`, `title`, `icon`) is supported via observed attributes.
    - Complex structured data (objects/arrays) is passed via reactive property setters/getters (`element.data = ...`, `element.deductor = ...`, `element.payments = ...`).
 3. **DOM Encapsulation**: Use semantic HTML with `@svinayaka/siddi-design-system` classes and tokens.
-4. **Registration**: Ensure all components register through `customElements.define()` with guard check `if (!customElements.get('tag-name'))` and export through `src/components/index.js`.
+4. **Registration**: Ensure all components register through `customElements.define()` with guard check `if (!customElements.get('tag-name'))` and export through `src/components/index.ts`.
 
 ---
 
@@ -125,13 +127,69 @@ interface AisDeveloperSchema {
 
 ---
 
-## 6. Build & Test Commands
+## 6. SonarQube, Stylelint & Code Quality Standards
+
+Code quality and security analysis are strictly enforced on every commit using **SonarQube / SonarCloud rules**, **ESLint (SonarJS)**, and **Stylelint**.
+
+### SonarQube Standards
+1. **SonarQube Configuration**: Defined in [`sonar-project.properties`](file:///Users/siddhivinayaka/Documents/Learning/ais/sonar-project.properties) (`sonar.projectKey=svinayaka_Tax-AIS`).
+2. **ESLint with SonarJS**:
+   - Implemented via `eslint-plugin-sonarjs` in [`eslint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/eslint.config.js).
+   - Enforces **Cognitive Complexity &le; 30**, dead code detection, duplicate branch detection, security hotspot checking, and clean modular logic.
+3. **Stylelint Standards**:
+   - Implemented via [`stylelint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/.stylelintrc.json) extending `stylelint-config-standard`.
+   - Validates all CSS against modern syntax standards and prevents style regressions.
+
+---
+
+## 7. Pre-Commit Hook Validation Workflow (`Husky` + `lint-staged`)
+
+A Git pre-commit hook is active in `.husky/pre-commit` to prevent committing invalid code:
+
+```
++-------------------------------------------------------------+
+|                     git commit triggered                    |
++-------------------------------------------------------------+
+                               |
+                               v
+   [Step 1] npx lint-staged (Auto-fix & validate staged files)
+                               |
+                               v
+   [Step 2] tsc --noEmit (Strict TypeScript type-check)
+                               |
+                               v
+   [Step 3] npm run sonar:check (Full SonarJS & Stylelint check)
+                               |
+                               v
+                  Commit Allowed or Rejected
+```
+
+If any SonarQube rule, Stylelint error, or TypeScript type error is detected, the commit will be automatically blocked until resolved.
+
+---
+
+## 8. Build, Lint & Quality Check Commands
 
 ```bash
 # Start local development server
 npm run dev
 
-# Validate production build (must compile with 0 errors)
+# Run comprehensive SonarQube, Stylelint & TypeScript verification
+npm run sonar:check
+
+# Run ESLint + SonarJS analysis
+npm run lint
+
+# Auto-fix ESLint + SonarJS issues
+npm run lint:fix
+
+# Run Stylelint analysis on all stylesheets
+npm run stylelint
+
+# Auto-fix Stylelint issues
+npm run stylelint:fix
+
+# Validate production TypeScript build (must compile with 0 errors)
 npm run build
 
 # Preview production build locally
@@ -140,9 +198,10 @@ npm run preview
 
 ---
 
-## 7. Instructions for Contributing AI Agents
+## 9. Mandatory Instructions for Contributing AI Agents
 
-1. Always run `npm run build` to verify correctness before submitting changes.
-2. Maintain responsive layouts: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.
-3. Ensure both Light and Dark themes look crisp and well-contrasted.
-4. Keep the repository focused strictly on Indian Annual Information Statement (AIS / Form 168) and Form 26AS data.
+1. **Mandatory Quality Gate**: Run `npm run sonar:check` and `npm run build` before committing any changes. Both commands MUST pass with **0 errors**.
+2. **Zero SonarQube Smells**: Do not introduce nested ternary operators, redundant assignments, excessive cognitive complexity (> 30), or unhandled edge cases.
+3. **Strict CSS Tokens**: Use `@svinayaka/siddi-design-system` tokens (`--ksv-ds-*`) exclusively. Never add hardcoded hex values in component templates.
+4. **Responsive Layouts**: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.
+5. **Theme Support**: Ensure both Light and Dark modes remain crisp, legible, and compliant with accessibility contrast ratios.
