@@ -173,13 +173,25 @@ async function processPdfFile(
 
   state.structuredData = extractStructuredData(parseResult.rawText);
 
-  // Render First Page to Canvas
+  // Render First Page to Canvas (default to Fit Width)
   if (state.pdfDoc) {
     const page = await state.pdfDoc.getPage(1);
     const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
     document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
     if (canvas) {
       canvas.classList.remove('hidden');
+      // Compute fit zoom similar to zoomFitBtn
+      const nativeViewport = page.getViewport({ scale: 1.0 });
+      const container = document.getElementById('pdfCanvasContainer');
+      if (container) {
+        const style = window.getComputedStyle(container);
+        const padH = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+        const innerWidth = container.clientWidth - padH;
+        const fitZoom = innerWidth > 0 ? innerWidth / nativeViewport.width : state.currentZoom;
+        state.currentZoom = fitZoom;
+        const zoomText = document.getElementById('zoomLevelText');
+        if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
+      }
       await renderPageToCanvas(page, canvas, state.currentZoom);
     }
     updatePdfNavControls();
@@ -724,7 +736,17 @@ function setupEventListeners(): void {
 
   document.getElementById('zoomFitBtn')?.addEventListener('click', async () => {
     if (state.pdfDoc) {
-      state.currentZoom = 1.6; // Optimal fit width
+      // Compute zoom to fit the page width within the inner content area of the container.
+      // clientWidth includes padding, so subtract it to get the true drawable width.
+      const page = await state.pdfDoc.getPage(state.currentPageNum);
+      const nativeViewport = page.getViewport({ scale: 1.0 });
+      const container = document.getElementById('pdfCanvasContainer');
+      if (!container) return;
+      const style = window.getComputedStyle(container);
+      const padH = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const innerWidth = container.clientWidth - padH;
+      const fitZoom = innerWidth > 0 ? innerWidth / nativeViewport.width : state.currentZoom;
+      state.currentZoom = fitZoom;
       const zoomText = document.getElementById('zoomLevelText');
       if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
       await reRenderCurrentPdfPage();

@@ -1252,9 +1252,10 @@ h1, h2, h3, h4, h5, h6 {
     min-height: 700px;
     max-height: 85vh;
     overflow: auto;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
+
+    /* Use block (not flex) so overflow scrolls from left — flex justify-center
+       hides the left overflow making it unreachable by scrolling. */
+    display: block;
     width: 100%;
     background: var(--ksv-ds-bg-surface-sunken);
     border-radius: 0 0 var(--ksv-ds-radius-2xl) var(--ksv-ds-radius-2xl);
@@ -1265,7 +1266,11 @@ h1, h2, h3, h4, h5, h6 {
     border-radius: var(--ksv-ds-radius-md);
     background: var(--ksv-ds-interactive-primary-text);
     display: block;
+
+    /* Centers when canvas fits inside container;
+       does not clip when canvas is wider (scroll from left). */
     margin: 0 auto;
+    max-width: none;
   }
 
   .raw-text-container {
