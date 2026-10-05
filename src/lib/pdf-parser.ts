@@ -30,6 +30,64 @@ export interface TextLine {
   text?: string;
 }
 
+async function extractSinglePage(
+  pdf: any,
+  pageNum: number
+): Promise<{ pageData: PdfParseResult['pages'][number]; pageTextEntry: string }> {
+  const page = await pdf.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 1.5 });
+  const textContent = await page.getTextContent();
+
+  // Sort text items by vertical position (top to bottom), then horizontal (left to right)
+  const rawItems = textContent.items as Array<{
+    str: string;
+    dir: string;
+    width: number;
+    height?: number;
+    transform: number[];
+    fontName?: string;
+    hasEOL?: boolean;
+  }>;
+
+  const items: TextItem[] = rawItems.map(item => {
+    const transform = item.transform;
+    const x = transform[4];
+    const y = viewport.height - transform[5]; // Flip Y for standard DOM origin
+    const width = item.width * (viewport.scale / (viewport.scale || 1));
+    const height = item.height || Math.abs(transform[0]) || 12;
+    return {
+      str: item.str,
+      dir: item.dir,
+      width,
+      height,
+      transform,
+      x,
+      y,
+      fontSize: Math.abs(transform[0]) || 12,
+      fontName: item.fontName,
+      hasEOL: item.hasEOL
+    };
+  });
+
+  // Reconstruct lines preserving spatial layout
+  const lines = groupItemsIntoLines(items);
+  const pageText = lines.map(line => line.text || '').join('\n');
+
+  return {
+    pageData: {
+      pageNumber: pageNum,
+      width: viewport.width,
+      height: viewport.height,
+      items,
+      lines,
+      text: pageText,
+      pageObject: page,
+      viewport
+    },
+    pageTextEntry: `--- Page ${pageNum} ---\n` + pageText
+  };
+}
+
 /**
  * Parse an uploaded PDF file into raw text, metadata, and page layouts.
  */
@@ -54,7 +112,7 @@ export async function parsePdfDocument(
     arrayBuffer = file;
     fileSize = file.byteLength;
   } else {
-    throw new Error('Unsupported file input type');
+    throw new TypeError('Unsupported file input type');
   }
 
   onProgress({ stage: 'loading', percent: 15, message: 'Loading PDF binary stream...' });
@@ -90,66 +148,22 @@ export async function parsePdfDocument(
 
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
-  const pagesData: PdfParseResult['pages'] = [];
-  const fullTextParts: string[] = [];
 
   onProgress({ stage: 'parsing', percent: 35, message: `Extracting ${numPages} page(s)...` });
 
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const textContent = await page.getTextContent();
-    
-    // Sort text items by vertical position (top to bottom), then horizontal (left to right)
-    const rawItems = textContent.items as Array<{
-      str: string;
-      dir: string;
-      width: number;
-      height?: number;
-      transform: number[];
-      fontName?: string;
-      hasEOL?: boolean;
-    }>;
+  let completedPages = 0;
+  const pagePromises = Array.from({ length: numPages }, async (_, index) => {
+    const pageNum = index + 1;
+    const pageResult = await extractSinglePage(pdf, pageNum);
+    completedPages++;
+    const progressPct = 35 + Math.round((completedPages / numPages) * 45);
+    onProgress({ stage: 'extracting', percent: progressPct, message: `Processed page ${completedPages} of ${numPages}...` });
+    return pageResult;
+  });
 
-    const items: TextItem[] = rawItems.map(item => {
-      const transform = item.transform;
-      const x = transform[4];
-      const y = viewport.height - transform[5]; // Flip Y for standard DOM origin
-      const width = item.width * (viewport.scale / (viewport.scale || 1));
-      const height = item.height || Math.abs(transform[0]) || 12;
-      return {
-        str: item.str,
-        dir: item.dir,
-        width,
-        height,
-        transform,
-        x,
-        y,
-        fontSize: Math.abs(transform[0]) || 12,
-        fontName: item.fontName,
-        hasEOL: item.hasEOL
-      };
-    });
-
-    // Reconstruct lines preserving spatial layout
-    const lines = groupItemsIntoLines(items);
-    const pageText = lines.map(line => line.text || '').join('\n');
-
-    fullTextParts.push(`--- Page ${pageNum} ---\n` + pageText);
-    pagesData.push({
-      pageNumber: pageNum,
-      width: viewport.width,
-      height: viewport.height,
-      items,
-      lines,
-      text: pageText,
-      pageObject: page,
-      viewport
-    });
-
-    const progressPct = 35 + Math.round((pageNum / numPages) * 45);
-    onProgress({ stage: 'extracting', percent: progressPct, message: `Processed page ${pageNum} of ${numPages}...` });
-  }
+  const extractedPages = await Promise.all(pagePromises);
+  const pagesData = extractedPages.map(p => p.pageData);
+  const fullTextParts = extractedPages.map(p => p.pageTextEntry);
 
   // Extract document metadata
   let docMetadata: Record<string, unknown> = {};

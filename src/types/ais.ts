@@ -93,10 +93,12 @@ export interface KeyValuePair {
   confidence: number;
 }
 
+export type TableRowData = Record<string, string | number | null>;
+
 export interface ExtractedTable {
   title: string;
   headers: string[];
-  rows: Record<string, string | number | null>[];
+  rows: TableRowData[];
 }
 
 export interface DocumentSection {

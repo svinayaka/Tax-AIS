@@ -36,46 +36,66 @@ export function exportToJson(structuredData: StructuredExtractionResult | null, 
   return pretty ? JSON.stringify(cleanData, null, 2) : JSON.stringify(cleanData);
 }
 
+function sanitizeHeaderKey(header: string): string {
+  let key = header.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  while (key.startsWith('_')) {
+    key = key.slice(1);
+  }
+  while (key.endsWith('_')) {
+    key = key.slice(0, -1);
+  }
+  return key;
+}
+
 export function exportToCsv(structuredData: StructuredExtractionResult | null): string {
   if (!structuredData) return '';
 
   const parts: string[] = [];
 
   // 1. Key-Value Pairs
-  parts.push('# KEY-VALUE PAIRS');
-  parts.push('Category,Key,Value,Confidence');
-  structuredData.flatKeyValues.forEach(kv => {
-    parts.push(`"${escapeCsv(kv.category)}","${escapeCsv(kv.key)}","${escapeCsv(kv.value)}","${kv.confidence}%"`);
-  });
-  parts.push('');
+  const kvRows = structuredData.flatKeyValues.map(
+    kv => `"${escapeCsv(kv.category)}","${escapeCsv(kv.key)}","${escapeCsv(kv.value)}","${kv.confidence}%"`
+  );
+  parts.push(
+    '# KEY-VALUE PAIRS',
+    'Category,Key,Value,Confidence',
+    ...kvRows,
+    ''
+  );
 
   // 2. Tables
   if (structuredData.tables && structuredData.tables.length > 0) {
     structuredData.tables.forEach((tbl, idx) => {
-      const tableTitle = tbl.title || 'Table ' + (idx + 1);
-      parts.push(`# TABLE: ${escapeCsv(tableTitle)}`);
-      parts.push(tbl.headers.map(h => `"${escapeCsv(h)}"`).join(','));
-      
-      tbl.rows.forEach(row => {
+      const tableTitle = tbl.title || `Table ${idx + 1}`;
+      const headerRow = tbl.headers.map(h => `"${escapeCsv(h)}"`).join(',');
+      const dataRows = tbl.rows.map(row => {
         const rowCells = tbl.headers.map(h => {
-          const key = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
+          const key = sanitizeHeaderKey(h);
           return `"${escapeCsv(row[key] ?? '')}"`;
         });
-        parts.push(rowCells.join(','));
+        return rowCells.join(',');
       });
-      parts.push('');
+
+      parts.push(
+        `# TABLE: ${escapeCsv(tableTitle)}`,
+        headerRow,
+        ...dataRows,
+        ''
+      );
     });
   }
 
   // 3. Entities
-  parts.push('# ENTITIES');
-  parts.push('Entity Type,Value');
-  structuredData.entities.emails.forEach(e => parts.push(`"Email","${escapeCsv(e)}"`));
-  structuredData.entities.phones.forEach(p => parts.push(`"Phone","${escapeCsv(p)}"`));
-  structuredData.entities.dates.forEach(d => parts.push(`"Date","${escapeCsv(d)}"`));
-  structuredData.entities.monetaryAmounts.forEach(m => parts.push(`"Amount","${escapeCsv(m)}"`));
-  structuredData.entities.organizations.forEach(o => parts.push(`"Organization","${escapeCsv(o)}"`));
-  structuredData.entities.identifiers.forEach(id => parts.push(`"Identifier: ${escapeCsv(id.type)}","${escapeCsv(id.value)}"`));
+  parts.push(
+    '# ENTITIES',
+    'Entity Type,Value',
+    ...structuredData.entities.emails.map(e => `"Email","${escapeCsv(e)}"`),
+    ...structuredData.entities.phones.map(p => `"Phone","${escapeCsv(p)}"`),
+    ...structuredData.entities.dates.map(d => `"Date","${escapeCsv(d)}"`),
+    ...structuredData.entities.monetaryAmounts.map(m => `"Amount","${escapeCsv(m)}"`),
+    ...structuredData.entities.organizations.map(o => `"Organization","${escapeCsv(o)}"`),
+    ...structuredData.entities.identifiers.map(id => `"Identifier: ${escapeCsv(id.type)}","${escapeCsv(id.value)}"`)
+  );
 
   return parts.join('\n');
 }
@@ -106,8 +126,8 @@ export function exportToMarkdown(structuredData: StructuredExtractionResult | nu
       md += `| ${tbl.headers.map(() => '---').join(' | ')} |\n`;
       tbl.rows.forEach(row => {
         const cells = tbl.headers.map(h => {
-          const key = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
-          return row[key] ?? '';
+          const key = sanitizeHeaderKey(h);
+          return String(row[key] ?? '');
         });
         md += `| ${cells.join(' | ')} |\n`;
       });
@@ -142,8 +162,8 @@ export function downloadFile(content: string, fileName: string, mimeType: string
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
-  document.body.appendChild(a);
+  document.body.append(a);
   a.click();
-  document.body.removeChild(a);
+  a.remove();
   URL.revokeObjectURL(url);
 }

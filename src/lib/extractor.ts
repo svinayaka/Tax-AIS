@@ -8,6 +8,7 @@ import type {
   DocumentClassification,
   KeyValuePair,
   ExtractedTable,
+  TableRowData,
   DocumentSection,
   AisDeveloperSchema,
   PartAGeneralInfo,
@@ -122,42 +123,38 @@ function createEmptyResult(): StructuredExtractionResult {
   };
 }
 
+const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: number }> = [
+  { type: 'ais', keywords: ['annual information statement'], score: 5 },
+  { type: 'ais', keywords: ['form 168', 'form 26as'], score: 5 },
+  { type: 'ais', keywords: ['income tax department'], score: 4 },
+  { type: 'ais', keywords: ['part a', 'part b'], score: 4 },
+  { type: 'ais', keywords: ['tax deducted or collected at source', 'tds'], score: 3 },
+  { type: 'ais', keywords: ['assessee', 'permanent account number'], score: 3 },
+  { type: 'invoice', keywords: ['invoice', 'billed to', 'bill to'], score: 4 },
+  { type: 'invoice', keywords: ['payment due', 'due date'], score: 3 },
+  { type: 'invoice', keywords: ['subtotal', 'total due'], score: 3 },
+  { type: 'resume', keywords: ['curriculum vitae', 'resume'], score: 5 },
+  { type: 'resume', keywords: ['work experience', 'employment history'], score: 3 },
+  { type: 'medical', keywords: ['patient name', 'lab report', 'diagnostics'], score: 4 },
+  { type: 'financial', keywords: ['balance sheet', 'income statement', 'ebitda'], score: 4 }
+];
+
+function scoreDocument(lowerText: string): Record<string, number> {
+  const scores: Record<string, number> = { ais: 0, invoice: 0, resume: 0, medical: 0, financial: 0 };
+  for (const rule of CLASSIFICATION_KEYWORDS) {
+    if (rule.keywords.some(kw => lowerText.includes(kw))) {
+      scores[rule.type] = (scores[rule.type] || 0) + rule.score;
+    }
+  }
+  return scores;
+}
+
 /**
  * Classify document using keyword clustering
  */
 function classifyDocument(text: string): DocumentClassification {
   const lower = text.toLowerCase();
-  
-  const scores: Record<string, number> = {
-    ais: 0,
-    invoice: 0,
-    resume: 0,
-    medical: 0,
-    financial: 0
-  };
-
-  // AIS / Form 168 / 26AS Keywords
-  if (lower.includes('annual information statement')) scores.ais += 5;
-  if (lower.includes('form 168') || lower.includes('form 26as')) scores.ais += 5;
-  if (lower.includes('income tax department')) scores.ais += 4;
-  if (lower.includes('part a') && lower.includes('part b')) scores.ais += 4;
-  if (lower.includes('tax deducted or collected at source') || lower.includes('tds')) scores.ais += 3;
-  if (lower.includes('assessee') || lower.includes('permanent account number')) scores.ais += 3;
-
-  // Invoice Keywords
-  if (lower.includes('invoice') || lower.includes('billed to') || lower.includes('bill to')) scores.invoice += 4;
-  if (lower.includes('payment due') || lower.includes('due date')) scores.invoice += 3;
-  if (lower.includes('subtotal') || lower.includes('total due')) scores.invoice += 3;
-
-  // Resume Keywords
-  if (lower.includes('curriculum vitae') || lower.includes('resume')) scores.resume += 5;
-  if (lower.includes('work experience') || lower.includes('employment history')) scores.resume += 3;
-
-  // Medical Keywords
-  if (lower.includes('patient name') || lower.includes('lab report') || lower.includes('diagnostics')) scores.medical += 4;
-
-  // Financial Keywords
-  if (lower.includes('balance sheet') || lower.includes('income statement') || lower.includes('ebitda')) scores.financial += 4;
+  const scores = scoreDocument(lower);
 
   let bestType = 'general';
   let maxScore = 0;
@@ -196,6 +193,7 @@ function classifyDocument(text: string): DocumentClassification {
   };
 }
 
+
 /**
  * Extract Core Entities (Dates, Amounts, Emails, Phones, URLs, IDs, Orgs)
  */
@@ -211,7 +209,7 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   };
 
   // 1. Emails
-  const emailRegex = /\b([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})\b/gi;
+  const emailRegex = /\b([a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,})\b/gi;
   const emailMatches = [...text.matchAll(emailRegex)];
   entities.emails = [...new Set(emailMatches.map(m => m[1]))];
 
@@ -221,7 +219,7 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   entities.phones = [...new Set(phoneMatches.map(m => m[0].trim()))];
 
   // 3. URLs
-  const urlRegex = /(https?:\/\/\S+|www\.[a-z0-9.-]+\.[a-z]{2,}\S*|linkedin\.com\/in\/\S+|github\.com\/\S+)/gi;
+  const urlRegex = /(https?:\/\/\S+|www\.\S+|linkedin\.com\/in\/\S+|github\.com\/\S+)/gi;
   const urlMatches = [...text.matchAll(urlRegex)];
   entities.urls = [...new Set(urlMatches.map(m => m[0].replace(/[,.]$/, '')))];
 
@@ -231,19 +229,19 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   entities.dates = [...new Set(dateMatches.map(m => m[0].trim()))].slice(0, 10);
 
   // 5. Monetary Amounts
-  const moneyRegex = /[$€£¥₹]\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+(?:\.\d{2})?)\s?[MBK]?|\b\d{1,3}(?:,\d{3})*\.\d{2}\s?(?:USD|EUR|GBP|INR)\b/gi;
+  const moneyRegex = /[$€£¥₹]\s?(?:(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)\s?[MBK]?|\b(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2}\s?(?:USD|EUR|GBP|INR)\b/gi;
   const moneyMatches = [...text.matchAll(moneyRegex)];
   entities.monetaryAmounts = [...new Set(moneyMatches.map(m => m[0].trim()))].slice(0, 15);
 
   // 6. Identifiers (Invoice #, PO #, Tax ID, MRN, CIK)
   const idPatterns = [
-    { label: 'Invoice #', regex: /(?:Invoice(?:\s+Number|\s+#)?|INV#?)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'PO #', regex: /(?:PO(?:\s+Number|\s+#)?|Purchase\s+Order)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'Tax ID / VAT', regex: /(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'MRN', regex: /(?:MRN|Medical\s+Record\s+#?)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'Account #', regex: /(?:Account(?:\s+Number|\s+#)?|ACT#?)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'Report ID', regex: /(?:Report\s+ID|Lab\s+ID)\s*[:#]?\s*([a-z0-9-]+)/i },
-    { label: 'SEC CIK', regex: /(?:SEC\s+CIK|CIK)\s*[:#]?\s*(\d+)/i }
+    { label: 'Invoice #', regex: /(?:Invoice(?:\s+(?:Number|#))?|INV)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'PO #', regex: /(?:PO(?:\s+(?:Number|#))?|Purchase\s+Order)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'Tax ID / VAT', regex: /(?:Tax\s+ID|VAT(?:\s+Number)?|EIN)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'MRN', regex: /(?:MRN|Medical\s+Record(?:\s+#)?)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'Account #', regex: /(?:Account(?:\s+(?:Number|#))?|ACT)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'Report ID', regex: /(?:Report\s+ID|Lab\s+ID)\s*(?:[:#]\s*)?([a-z0-9-]+)/i },
+    { label: 'SEC CIK', regex: /(?:SEC\s+CIK|CIK)\s*(?:[:#]\s*)?(\d+)/i }
   ];
 
   idPatterns.forEach(pattern => {
@@ -318,6 +316,32 @@ function groupKeyValuesByCategory(kvs: KeyValuePair[]): Record<string, KeyValueP
   return grouped;
 }
 
+function isTableHeaderRow(cells: string[]): boolean {
+  return cells.some(c => /^(SR\.?\s*NO|QUARTER|DATE|AMOUNT|CODE|DESCRIPTION|ITEM|TOTAL)/i.test(c));
+}
+
+function parseTableRow(headers: string[], cells: string[]): TableRowData {
+  const rowObj: TableRowData = {};
+  headers.forEach((h, colIdx) => {
+    let propKey = h.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    while (propKey.startsWith('_')) {
+      propKey = propKey.slice(1);
+    }
+    while (propKey.endsWith('_')) {
+      propKey = propKey.slice(0, -1);
+    }
+    rowObj[propKey] = cells[colIdx] || '';
+  });
+  return rowObj;
+}
+
+function getTableTitle(lines: string[], index: number, fallbackCount: number): string {
+  if (index > 0 && lines[index - 1].length < 60 && !lines[index - 1].includes('|')) {
+    return lines[index - 1];
+  }
+  return `Table ${fallbackCount}`;
+}
+
 /**
  * Extract Pipe-delimited or Structured Tabular Data
  */
@@ -326,47 +350,41 @@ function extractTables(text: string): ExtractedTable[] {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
   let currentHeaders: string[] = [];
-  let currentRows: Record<string, string | number | null>[] = [];
+  let currentRows: TableRowData[] = [];
   let tableTitle = 'Extracted Table';
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    if (line.includes('|')) {
-      const cells = line.split('|').map(c => c.trim()).filter(Boolean);
-
-      if (cells.length >= 3) {
-        const isHeader = cells.some(c => /^(SR\.?\s*NO|QUARTER|DATE|AMOUNT|CODE|DESCRIPTION|ITEM|TOTAL)/i.test(c));
-
-        if (isHeader) {
-          if (currentHeaders.length > 0 && currentRows.length > 0) {
-            tables.push({ title: tableTitle, headers: currentHeaders, rows: currentRows });
-          }
-          currentHeaders = cells;
-          currentRows = [];
-          tableTitle = i > 0 && lines[i - 1].length < 60 && !lines[i - 1].includes('|') ? lines[i - 1] : `Table ${tables.length + 1}`;
-        } else if (currentHeaders.length > 0 && cells.length >= Math.min(3, currentHeaders.length - 1)) {
-          const rowObj: Record<string, string | number | null> = {};
-          currentHeaders.forEach((h, colIdx) => {
-            const propKey = h.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
-            rowObj[propKey] = cells[colIdx] || '';
-          });
-          currentRows.push(rowObj);
-        }
-      }
-    } else if (currentHeaders.length > 0 && currentRows.length > 0 && !line.includes('|')) {
+  const flushTable = () => {
+    if (currentHeaders.length > 0 && currentRows.length > 0) {
       tables.push({ title: tableTitle, headers: currentHeaders, rows: currentRows });
       currentHeaders = [];
       currentRows = [];
     }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (!line.includes('|')) {
+      flushTable();
+      continue;
+    }
+
+    const cells = line.split('|').map(c => c.trim()).filter(Boolean);
+    if (cells.length < 3) continue;
+
+    if (isTableHeaderRow(cells)) {
+      flushTable();
+      currentHeaders = cells;
+      tableTitle = getTableTitle(lines, i, tables.length + 1);
+    } else if (currentHeaders.length > 0 && cells.length >= Math.min(3, currentHeaders.length - 1)) {
+      currentRows.push(parseTableRow(currentHeaders, cells));
+    }
   }
 
-  if (currentHeaders.length > 0 && currentRows.length > 0) {
-    tables.push({ title: tableTitle, headers: currentHeaders, rows: currentRows });
-  }
-
+  flushTable();
   return tables;
 }
+
 
 /**
  * Extract Hierarchical Sections
@@ -544,11 +562,8 @@ function cleanCodeAndDesc(rawCode: string, rawDesc: string): { code: string; des
   return { code, desc };
 }
 
-function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsTransaction[] {
-  const partB1: PartB1TdsTcsTransaction[] = [];
+function parseRegexLineItems(text: string): PartB1LineItem[] {
   const allLineItems: PartB1LineItem[] = [];
-
-  // 1. Line items: match quarter (Q1-Q4), date (DD/MM/YYYY or DD-MM-YYYY), amount paid, tds deducted, tds deposited
   const lineItemRegex = /(?:(\d+)\s+)?(Q[1-4](?:\s*\([^)]+\))?)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)(?:\s+([a-z0-9_-]+))?/gi;
   let lineMatch: RegExpExecArray | null;
 
@@ -563,29 +578,32 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
       status: lineMatch[7] ? lineMatch[7].trim() : 'Active'
     });
   }
+  return allLineItems;
+}
 
-  // 2. Pipe-delimited line items fallback
-  if (allLineItems.length === 0) {
-    lines.forEach(line => {
-      if (line.includes('|') && /Q[1-4]/i.test(line) && /\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/.test(line)) {
-        const parts = line.split('|').map(p => p.trim());
-        if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr')) {
-          allLineItems.push({
-            sr_no: allLineItems.length + 1,
-            quarter: parts[1] || 'Q1',
-            date_of_payment: parts[2] || '',
-            amount_paid_credited: parseNum(parts[3]),
-            tds_deducted: parseNum(parts[4]),
-            tds_deposited: parseNum(parts[5]),
-            status: parts[6] || 'Active'
-          });
-        }
+function parsePipeLineItems(lines: string[]): PartB1LineItem[] {
+  const allLineItems: PartB1LineItem[] = [];
+  lines.forEach(line => {
+    if (line.includes('|') && /Q[1-4]/i.test(line) && /\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/.test(line)) {
+      const parts = line.split('|').map(p => p.trim());
+      if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr')) {
+        allLineItems.push({
+          sr_no: allLineItems.length + 1,
+          quarter: parts[1] || 'Q1',
+          date_of_payment: parts[2] || '',
+          amount_paid_credited: parseNum(parts[3]),
+          tds_deducted: parseNum(parts[4]),
+          tds_deposited: parseNum(parts[5]),
+          status: parts[6] || 'Active'
+        });
       }
-    });
-  }
+    }
+  });
+  return allLineItems;
+}
 
-  // 3. Extract Deductors:
-  // Step A: Check pipe table lines first (ignoring headers)
+function extractDeductorsFromPipes(lines: string[], allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
+  const partB1: PartB1TdsTcsTransaction[] = [];
   lines.forEach(line => {
     if (line.includes('|') && (line.includes('TDS-') || line.includes('TCS-') || line.includes('Sec 19') || /\([a-z]{4}\d{5}[a-z]\)/i.test(line))) {
       const parts = line.split('|').map(p => p.trim());
@@ -605,52 +623,68 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
       }
     }
   });
+  return partB1;
+}
 
-  // Step B: Space-separated deductor summary (from PDF text)
-  if (partB1.length === 0) {
-    const deductorBlockRegex = /(?:(\d+)\s+)?(TDS-[^\s]+|TCS-[^\s]+|TDS-[a-z0-9()/:.[\]-]+)\s+(.+?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
-    let dMatch: RegExpExecArray | null;
-    while ((dMatch = deductorBlockRegex.exec(text)) !== null) {
-      const count = parseInt(dMatch[5], 10) || 3;
-      const deductorLineItems = allLineItems.splice(0, count);
-      const { code, desc } = cleanCodeAndDesc(dMatch[2], dMatch[3]);
+function extractDeductorsFromRegex(text: string, allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
+  const partB1: PartB1TdsTcsTransaction[] = [];
+  const deductorBlockRegex = /(?:(\d+)\s+)?(TDS-[^\s]+|TCS-[^\s]+|TDS-[a-z0-9()/:.[\]-]+)\s+(.+?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
+  let dMatch: RegExpExecArray | null;
+  while ((dMatch = deductorBlockRegex.exec(text)) !== null) {
+    const count = parseInt(dMatch[5], 10) || 3;
+    const deductorLineItems = allLineItems.splice(0, count);
+    const { code, desc } = cleanCodeAndDesc(dMatch[2], dMatch[3]);
 
-      partB1.push({
-        sr_no: dMatch[1] ? parseInt(dMatch[1], 10) : (partB1.length + 1),
-        information_code: code,
-        information_description: desc,
-        information_source: dMatch[4].trim(),
-        total_amount_credited: parseNum(dMatch[6]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
-        line_items: deductorLineItems
-      });
-    }
+    partB1.push({
+      sr_no: dMatch[1] ? parseInt(dMatch[1], 10) : (partB1.length + 1),
+      information_code: code,
+      information_description: desc,
+      information_source: dMatch[4].trim(),
+      total_amount_credited: parseNum(dMatch[6]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
+      line_items: deductorLineItems
+    });
+  }
+  return partB1;
+}
+
+function extractDeductorsFromTan(text: string, allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
+  const partB1: PartB1TdsTcsTransaction[] = [];
+  const tanRegex = /([a-z0-9\s.,&-]+?\(([a-z]{4}\d{5}[a-z])\))/gi;
+  const tanMatches = [...text.matchAll(tanRegex)];
+  if (tanMatches.length === 0) return partB1;
+
+  const uniqueSources = [...new Set(tanMatches.map(m => m[1].trim()))];
+  const itemsPerSource = Math.ceil(allLineItems.length / uniqueSources.length) || 1;
+
+  uniqueSources.forEach((src, idx) => {
+    const deductorLineItems = allLineItems.splice(0, itemsPerSource);
+    const totalCred = deductorLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
+
+    partB1.push({
+      sr_no: idx + 1,
+      information_code: 'TDS-194A',
+      information_description: 'Interest received on securities / TDS Transaction',
+      information_source: src,
+      total_amount_credited: totalCred,
+      line_items: deductorLineItems
+    });
+  });
+  return partB1;
+}
+
+function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsTransaction[] {
+  let allLineItems = parseRegexLineItems(text);
+  if (allLineItems.length === 0) {
+    allLineItems = parsePipeLineItems(lines);
   }
 
-  // Step C: TAN pattern heuristic for any deductor with TAN
+  let partB1 = extractDeductorsFromPipes(lines, allLineItems);
   if (partB1.length === 0) {
-    const tanRegex = /([a-z0-9\s.,&-]+?\(([a-z]{4}\d{5}[a-z])\))/gi;
-    const tanMatches = [...text.matchAll(tanRegex)];
-    if (tanMatches.length > 0) {
-      const uniqueSources = [...new Set(tanMatches.map(m => m[1].trim()))];
-      const itemsPerSource = Math.ceil(allLineItems.length / uniqueSources.length) || 1;
-      
-      uniqueSources.forEach((src, idx) => {
-        const deductorLineItems = allLineItems.splice(0, itemsPerSource);
-        const totalCred = deductorLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
-
-        partB1.push({
-          sr_no: idx + 1,
-          information_code: 'TDS-194A',
-          information_description: 'Interest received on securities / TDS Transaction',
-          information_source: src,
-          total_amount_credited: totalCred,
-          line_items: deductorLineItems
-        });
-      });
-    }
+    partB1 = extractDeductorsFromRegex(text, allLineItems);
   }
-
-  // Step D: If line items exist but no TAN found, group under general deductor
+  if (partB1.length === 0) {
+    partB1 = extractDeductorsFromTan(text, allLineItems);
+  }
   if (partB1.length === 0 && allLineItems.length > 0) {
     const totalCred = allLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
     partB1.push({
@@ -666,10 +700,15 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
   return partB1;
 }
 
-function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayment[] {
-  const partB3: PartB3TaxPayment[] = [];
+function parseTaxPaymentMinorHead(rawHead: string): string {
+  const lower = rawHead.toLowerCase();
+  if (lower.includes('advance')) return 'Advance Tax';
+  if (lower.includes('regular')) return 'Regular Assessment';
+  return 'Self Assessment';
+}
 
-  // 1. Pipe table parsing
+function extractTaxPaymentsFromPipes(lines: string[]): PartB3TaxPayment[] {
+  const partB3: PartB3TaxPayment[] = [];
   lines.forEach(line => {
     if (line.includes('|') && (line.toLowerCase().includes('income tax') || line.toLowerCase().includes('self assessment') || /\d{7}/.test(line))) {
       const parts = line.split('|').map(p => p.trim());
@@ -687,53 +726,55 @@ function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayme
       }
     }
   });
+  return partB3;
+}
 
-  // 2. Space-delimited challan regex (from PDF text)
-  if (partB3.length === 0) {
-    const b3Regex = /(?:(\d+)\s+)?(\d{4}-\d{2})\s+([a-z\s()]+?)\s+([\d,.]+)(?:\s+[\d,.]+){1,5}\s+([\d,.]+)\s+(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})(?:\s+([a-z0-9]+))?/gi;
-    let b3Match: RegExpExecArray | null;
-    while ((b3Match = b3Regex.exec(text)) !== null) {
-      const rawHead = b3Match[3].trim();
-      let majorHead = 'Income Tax (Other than Companies)';
-      let minorHead = 'Self Assessment';
-
-      if (rawHead.toLowerCase().includes('advance')) {
-        minorHead = 'Advance Tax';
-      } else if (rawHead.toLowerCase().includes('regular')) {
-        minorHead = 'Regular Assessment';
-      }
-
-      partB3.push({
-        financial_year: b3Match[2],
-        major_head: majorHead,
-        minor_head: minorHead,
-        tax_amount: parseNum(b3Match[4]),
-        total_challan_amount: parseNum(b3Match[5]),
-        bsr_code: b3Match[6],
-        date_of_deposit: b3Match[7],
-        challan_serial_number: parseInt(b3Match[8], 10)
-      });
-    }
+function extractTaxPaymentsFromRegex(text: string): PartB3TaxPayment[] {
+  const partB3: PartB3TaxPayment[] = [];
+  const b3Regex = /(?:(\d+)\s+)?(\d{4}-\d{2})\s+([a-z\s()]+?)\s+([\d,.]+)(?:\s+[\d,.]+){1,5}\s+([\d,.]+)\s+(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})(?:\s+([a-z0-9]+))?/gi;
+  let b3Match: RegExpExecArray | null;
+  while ((b3Match = b3Regex.exec(text)) !== null) {
+    partB3.push({
+      financial_year: b3Match[2],
+      major_head: 'Income Tax (Other than Companies)',
+      minor_head: parseTaxPaymentMinorHead(b3Match[3]),
+      tax_amount: parseNum(b3Match[4]),
+      total_challan_amount: parseNum(b3Match[5]),
+      bsr_code: b3Match[6],
+      date_of_deposit: b3Match[7],
+      challan_serial_number: parseInt(b3Match[8], 10)
+    });
   }
+  return partB3;
+}
 
-  // 3. Fallback: FY + BSR code (7 digits) + Date + Challan Serial
-  if (partB3.length === 0) {
-    const fallbackRegex = /(\d{4}-\d{2})[^\n\r\d]{1,60}?([\d,.]+)[^\n\r]{0,60}?(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})/gi;
-    let fbMatch: RegExpExecArray | null;
-    while ((fbMatch = fallbackRegex.exec(text)) !== null) {
-      partB3.push({
-        financial_year: fbMatch[1],
-        major_head: 'Income Tax (Other than Companies)',
-        minor_head: 'Self Assessment',
-        tax_amount: parseNum(fbMatch[2]),
-        total_challan_amount: parseNum(fbMatch[2]),
-        bsr_code: fbMatch[3],
-        date_of_deposit: fbMatch[4],
-        challan_serial_number: parseInt(fbMatch[5], 10)
-      });
-    }
+function extractTaxPaymentsFallback(text: string): PartB3TaxPayment[] {
+  const partB3: PartB3TaxPayment[] = [];
+  const fallbackRegex = /(\d{4}-\d{2})[^\n\r\d]{1,60}?([\d,.]+)[^\n\r]{0,60}?(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})/gi;
+  let fbMatch: RegExpExecArray | null;
+  while ((fbMatch = fallbackRegex.exec(text)) !== null) {
+    partB3.push({
+      financial_year: fbMatch[1],
+      major_head: 'Income Tax (Other than Companies)',
+      minor_head: 'Self Assessment',
+      tax_amount: parseNum(fbMatch[2]),
+      total_challan_amount: parseNum(fbMatch[2]),
+      bsr_code: fbMatch[3],
+      date_of_deposit: fbMatch[4],
+      challan_serial_number: parseInt(fbMatch[5], 10)
+    });
   }
+  return partB3;
+}
 
+function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayment[] {
+  let partB3 = extractTaxPaymentsFromPipes(lines);
+  if (partB3.length === 0) {
+    partB3 = extractTaxPaymentsFromRegex(text);
+  }
+  if (partB3.length === 0) {
+    partB3 = extractTaxPaymentsFallback(text);
+  }
   return partB3;
 }
 

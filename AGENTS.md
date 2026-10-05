@@ -138,7 +138,7 @@ Code quality and security analysis are strictly enforced on every commit using *
    - `sonar.typescript.file.suffixes=.ts,.tsx`
 2. **ESLint with SonarJS & TypeScript**:
    - Implemented via `eslint-plugin-sonarjs` and `@typescript-eslint` in [`eslint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/eslint.config.js).
-   - Enforces **Cognitive Complexity &le; 30**, dead code detection, redundant type aliases, duplicate branch detection, security hotspot checking, and clean modular logic.
+   - Enforces **Cognitive Complexity &le; 15**, dead code detection, redundant type aliases, duplicate branch detection, security hotspot checking, and clean modular logic.
 3. **Regular Expression & Pattern Safety Rules**:
    - **Case-Insensitivity (`/i` flag)**: When `/i` is specified, always use lowercase character classes (e.g., `[a-z0-9-]`) instead of `[A-Z]` or `[A-Za-z]` to prevent `sonarjs/duplicates-in-character-class` violations.
    - **No Duplicates in Character Classes**: Never duplicate characters or specify overlapping character ranges inside `[...]` (e.g., `[a-zA-Z0-9._%+-]`).
@@ -215,7 +215,7 @@ npm run preview
 ## 9. Mandatory Instructions for Contributing AI Agents
 
 1. **Mandatory Quality Gate**: Run `npm run sonar:check` and `npm run build` before committing any changes. Both commands MUST pass with **0 errors**.
-2. **Zero SonarQube Smells**: Do not introduce nested ternary operators, redundant assignments, regex duplicate character classes, unbounded wildcards (`.*?`), excessive cognitive complexity (> 30), or unhandled edge cases.
+2. **Zero SonarQube Smells**: Do not introduce nested ternary operators, redundant assignments, regex duplicate character classes, unbounded wildcards (`.*?`), excessive cognitive complexity (> 15), or unhandled edge cases.
 3. **Zero Mock Fallbacks**: Never return hardcoded mock data when parsing fails; return empty arrays or empty strings.
 4. **Strict CSS Tokens**: Use `@svinayaka/siddi-design-system` tokens (`--ksv-ds-*`) exclusively. Never add hardcoded hex values in component templates.
 5. **Responsive Layouts**: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.

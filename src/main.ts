@@ -7,6 +7,12 @@ import { escapeHtml, formatInr } from './lib/dom-utils';
 
 // Import Siddi-compliant Stencil / Web Components
 import './components/index';
+import {
+  ColorIndigo500,
+  ColorViolet500,
+  ColorEmerald500,
+  ColorSky500
+} from '@svinayaka/siddi-design-system/tokens';
 import { AisPartA } from './components/ais-part-a';
 import { AisDeductorCard } from './components/ais-deductor-card';
 import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
@@ -65,7 +71,7 @@ function showToast(message: string, type: 'info' | 'success' | 'error' = 'info',
     <span>${escapeHtml(message)}</span>
   `;
 
-  container.appendChild(toast);
+  container.append(toast);
   refreshIcons();
 
   setTimeout(() => {
@@ -79,14 +85,14 @@ function showToast(message: string, type: 'info' | 'success' | 'error' = 'info',
 // Theme Management
 // ==========================================================================
 function initTheme(): void {
-  document.documentElement.setAttribute('data-theme', state.theme);
-  document.documentElement.setAttribute('data-ksv-ds-theme', state.theme);
+  document.documentElement.dataset.theme = state.theme;
+  document.documentElement.dataset.ksvDsTheme = state.theme;
   const toggleBtn = document.getElementById('themeToggleBtn');
   if (toggleBtn) {
     toggleBtn.addEventListener('click', () => {
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', state.theme);
-      document.documentElement.setAttribute('data-ksv-ds-theme', state.theme);
+      document.documentElement.dataset.theme = state.theme;
+      document.documentElement.dataset.ksvDsTheme = state.theme;
       localStorage.setItem('ais_theme', state.theme);
       showToast(`Switched to ${state.theme} theme`, 'info', 2000);
     });
@@ -318,11 +324,11 @@ function resetToFreshUpload(): void {
 }
 
 function triggerConfetti(): void {
-  confetti({
+  void confetti({
     particleCount: 50,
     spread: 60,
     origin: { y: 0.7 },
-    colors: ['#6366f1', '#a855f7', '#10b981', '#3b82f6']
+    colors: [ColorIndigo500, ColorViolet500, ColorEmerald500, ColorSky500]
   });
 }
 
@@ -552,7 +558,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
     partB1.forEach((deductor) => {
       const card = document.createElement('ais-deductor-card') as AisDeductorCard;
       card.deductor = deductor;
-      deductorsContainer.appendChild(card);
+      deductorsContainer.append(card);
     });
   }
 
@@ -594,31 +600,31 @@ function updatePdfNavControls(): void {
   if (nextBtn) nextBtn.disabled = state.currentPageNum >= state.totalPages;
 }
 
-function setDocViewMode(mode: 'canvas' | 'text'): void {
-  state.docViewMode = mode;
-  const canvasContainer = document.getElementById('pdfCanvasContainer');
-  const rawTextContainer = document.getElementById('rawTextContainer');
-  const viewCanvasBtn = document.getElementById('viewCanvasBtn');
-  const viewTextBtn = document.getElementById('viewTextBtn');
-  const pdfNavControls = document.getElementById('pdfNavControls');
-  const pdfZoomControls = document.getElementById('pdfZoomControls');
+function toggleElementClass(id: string, className: string, force: boolean): void {
+  document.getElementById(id)?.classList.toggle(className, force);
+}
 
-  if (mode === 'canvas') {
-    canvasContainer?.classList.remove('hidden');
-    rawTextContainer?.classList.add('hidden');
-    viewCanvasBtn?.classList.add('active');
-    viewTextBtn?.classList.remove('active');
-    if (pdfNavControls) pdfNavControls.style.display = state.pdfDoc ? 'flex' : 'none';
-    if (pdfZoomControls) pdfZoomControls.style.display = state.pdfDoc ? 'flex' : 'none';
-  } else {
-    canvasContainer?.classList.add('hidden');
-    rawTextContainer?.classList.remove('hidden');
-    viewCanvasBtn?.classList.remove('active');
-    viewTextBtn?.classList.add('active');
-    if (pdfNavControls) pdfNavControls.style.display = 'none';
-    if (pdfZoomControls) pdfZoomControls.style.display = 'none';
+function setElementDisplay(id: string, display: string): void {
+  const el = document.getElementById(id);
+  if (el) {
+    el.style.display = display;
   }
 }
+
+function setDocViewMode(mode: 'canvas' | 'text'): void {
+  state.docViewMode = mode;
+  const isCanvas = mode === 'canvas';
+  const controlDisplay = isCanvas && state.pdfDoc ? 'flex' : 'none';
+
+  toggleElementClass('pdfCanvasContainer', 'hidden', !isCanvas);
+  toggleElementClass('rawTextContainer', 'hidden', isCanvas);
+  toggleElementClass('viewCanvasBtn', 'active', isCanvas);
+  toggleElementClass('viewTextBtn', 'active', !isCanvas);
+
+  setElementDisplay('pdfNavControls', controlDisplay);
+  setElementDisplay('pdfZoomControls', controlDisplay);
+}
+
 
 // ==========================================================================
 // Event Listeners Setup
@@ -635,7 +641,7 @@ function setupEventListeners(): void {
       const target = e.target as HTMLInputElement;
       const file = target.files?.[0];
       if (file) {
-        handleFileUpload(file);
+        void handleFileUpload(file);
       }
     });
 
@@ -659,7 +665,7 @@ function setupEventListeners(): void {
       const dragEvent = e as DragEvent;
       const file = dragEvent.dataTransfer?.files?.[0];
       if (file) {
-        handleFileUpload(file);
+        void handleFileUpload(file);
       }
     });
   }
@@ -671,13 +677,13 @@ function setupEventListeners(): void {
   });
 
   // 4. Workspace Tabs
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll<HTMLElement>('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const tabId = btn.getAttribute('data-tab') || 'aisview';
+      const tabId = btn.dataset.tab || 'aisview';
       state.activeTab = tabId;
 
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
 
       btn.classList.add('active');
       const targetPane = document.getElementById(`pane-${tabId}`);
@@ -690,8 +696,12 @@ function setupEventListeners(): void {
   document.getElementById('viewTextBtn')?.addEventListener('click', () => setDocViewMode('text'));
 
   // 6. PDF Viewer Navigation
-  document.getElementById('prevPageBtn')?.addEventListener('click', () => changePdfPage(-1));
-  document.getElementById('nextPageBtn')?.addEventListener('click', () => changePdfPage(1));
+  document.getElementById('prevPageBtn')?.addEventListener('click', () => {
+    void changePdfPage(-1);
+  });
+  document.getElementById('nextPageBtn')?.addEventListener('click', () => {
+    void changePdfPage(1);
+  });
 
   // 7. High-DPI Zoom Controls
   document.getElementById('zoomInBtn')?.addEventListener('click', async () => {
