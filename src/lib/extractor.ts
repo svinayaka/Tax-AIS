@@ -211,7 +211,7 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
   };
 
   // 1. Emails
-  const emailRegex = /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/g;
+  const emailRegex = /\b([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})\b/gi;
   const emailMatches = [...text.matchAll(emailRegex)];
   entities.emails = [...new Set(emailMatches.map(m => m[1]))];
 
@@ -264,7 +264,7 @@ function extractEntities(text: string): StructuredExtractionResult['entities'] {
  */
 function extractKeyValuePairs(lines: string[]): KeyValuePair[] {
   const kvPairs: KeyValuePair[] = [];
-  const genericDelimRegex = /^([a-zA-Z0-9\s()/#_.-]{2,40})\s*[:=]\s*(.+)$/;
+  const genericDelimRegex = /^([a-z0-9\s()/#_.-]{2,40})\s*[:=]\s*(.+)$/i;
 
   lines.forEach(line => {
     if (line.length > 180 || line.includes('|') || line.startsWith('#')) return;
@@ -497,7 +497,7 @@ function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
                       text.match(/\b([6-9]\d{9})\b/);
   const mobileNumber = mobileMatch ? mobileMatch[1].trim() : '';
 
-  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  const emailMatch = text.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
   const emailAddress = emailMatch ? emailMatch[1].trim() : '';
 
   let address = '';
@@ -517,57 +517,149 @@ function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
   };
 }
 
+function cleanCodeAndDesc(rawCode: string, rawDesc: string): { code: string; desc: string } {
+  const combined = `${rawCode} ${rawDesc}`.replace(/\s+/g, ' ').trim();
+  let code: string;
+  let desc: string;
+
+  const codeMatch = combined.match(/^(T(?:DS|CS)-[0-9a-z()]+(?:\[Table:[^\]]+\])?)/i);
+  if (codeMatch) {
+    code = codeMatch[1];
+    desc = combined.slice(codeMatch[0].length).replace(/^[^\w(]+/, '').trim();
+  } else {
+    code = rawCode.trim();
+    desc = rawDesc.trim();
+  }
+
+  if (desc.includes('[Table:') && !desc.includes('])')) {
+    desc = desc.replace(/\[Table:.*$/, '').trim();
+  }
+  if ((desc.match(/\(/g) || []).length > (desc.match(/\)/g) || []).length) {
+    desc += ')';
+  }
+  if (!desc) {
+    desc = 'Tax Deducted at Source / Securities Interest';
+  }
+
+  return { code, desc };
+}
+
 function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsTransaction[] {
   const partB1: PartB1TdsTcsTransaction[] = [];
-  const lineItemRegex = /(?:(\d+)\s+)?(Q[1-4](?:\([a-z-]+\))?)\s+(\d{2}\/\d{2}\/\d{4})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)\s+(Active|Inactive)/gi;
   const allLineItems: PartB1LineItem[] = [];
+
+  // 1. Line items: match quarter (Q1-Q4), date (DD/MM/YYYY or DD-MM-YYYY), amount paid, tds deducted, tds deposited
+  const lineItemRegex = /(?:(\d+)\s+)?(Q[1-4](?:\s*\([^)]+\))?)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+([\d,.]+)\s+([\d,.]+)\s+([\d,.]+)(?:\s+([a-z0-9_-]+))?/gi;
   let lineMatch: RegExpExecArray | null;
 
   while ((lineMatch = lineItemRegex.exec(text)) !== null) {
     allLineItems.push({
       sr_no: lineMatch[1] ? parseInt(lineMatch[1], 10) : (allLineItems.length + 1),
-      quarter: lineMatch[2],
-      date_of_payment: lineMatch[3],
+      quarter: lineMatch[2].trim(),
+      date_of_payment: lineMatch[3].trim(),
       amount_paid_credited: parseNum(lineMatch[4]),
       tds_deducted: parseNum(lineMatch[5]),
       tds_deposited: parseNum(lineMatch[6]),
-      status: lineMatch[7]
+      status: lineMatch[7] ? lineMatch[7].trim() : 'Active'
     });
   }
 
-  // Check for pipe-delimited format
+  // 2. Pipe-delimited line items fallback
+  if (allLineItems.length === 0) {
+    lines.forEach(line => {
+      if (line.includes('|') && /Q[1-4]/i.test(line) && /\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/.test(line)) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr')) {
+          allLineItems.push({
+            sr_no: allLineItems.length + 1,
+            quarter: parts[1] || 'Q1',
+            date_of_payment: parts[2] || '',
+            amount_paid_credited: parseNum(parts[3]),
+            tds_deducted: parseNum(parts[4]),
+            tds_deposited: parseNum(parts[5]),
+            status: parts[6] || 'Active'
+          });
+        }
+      }
+    });
+  }
+
+  // 3. Extract Deductors:
+  // Step A: Check pipe table lines first (ignoring headers)
   lines.forEach(line => {
-    if (line.includes('|') && /Q[1-4]/i.test(line) && /\d{2}\/\d{2}\/\d{4}/.test(line)) {
+    if (line.includes('|') && (line.includes('TDS-') || line.includes('TCS-') || line.includes('Sec 19') || /\([a-z]{4}\d{5}[a-z]\)/i.test(line))) {
       const parts = line.split('|').map(p => p.trim());
-      if (parts.length >= 6) {
-        allLineItems.push({
-          sr_no: allLineItems.length + 1,
-          quarter: parts[1] || 'Q1',
-          date_of_payment: parts[2] || '',
-          amount_paid_credited: parseNum(parts[3]),
-          tds_deducted: parseNum(parts[4]),
-          tds_deposited: parseNum(parts[5]),
-          status: parts[6] || 'Active'
+      if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('information code')) {
+        const count = parseInt(parts[4], 10) || 3;
+        const deductorLineItems = allLineItems.splice(0, count);
+        const { code, desc } = cleanCodeAndDesc(parts[1], parts[2]);
+
+        partB1.push({
+          sr_no: parseInt(parts[0], 10) || (partB1.length + 1),
+          information_code: code,
+          information_description: desc,
+          information_source: parts[3] || '',
+          total_amount_credited: parseNum(parts[5]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
+          line_items: deductorLineItems
         });
       }
     }
   });
 
-  // Extract Deductor Entities
-  const deductorRegex = /(\d+)\s*\|\s*(TDS-[^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+(?:\([a-z0-9]+\))?)\s*\|\s*(\d+)\s*\|\s*([\d,.]+)/gi;
-  let dedMatch: RegExpExecArray | null;
+  // Step B: Space-separated deductor summary (from PDF text)
+  if (partB1.length === 0) {
+    const deductorBlockRegex = /(?:(\d+)\s+)?(TDS-[^\s]+|TCS-[^\s]+|TDS-[a-z0-9()/:.[\]-]+)\s+(.+?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
+    let dMatch: RegExpExecArray | null;
+    while ((dMatch = deductorBlockRegex.exec(text)) !== null) {
+      const count = parseInt(dMatch[5], 10) || 3;
+      const deductorLineItems = allLineItems.splice(0, count);
+      const { code, desc } = cleanCodeAndDesc(dMatch[2], dMatch[3]);
 
-  while ((dedMatch = deductorRegex.exec(text)) !== null) {
-    const count = parseInt(dedMatch[5], 10) || 3;
-    const deductorLineItems = allLineItems.splice(0, count);
+      partB1.push({
+        sr_no: dMatch[1] ? parseInt(dMatch[1], 10) : (partB1.length + 1),
+        information_code: code,
+        information_description: desc,
+        information_source: dMatch[4].trim(),
+        total_amount_credited: parseNum(dMatch[6]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
+        line_items: deductorLineItems
+      });
+    }
+  }
 
+  // Step C: TAN pattern heuristic for any deductor with TAN
+  if (partB1.length === 0) {
+    const tanRegex = /([a-z0-9\s.,&-]+?\(([a-z]{4}\d{5}[a-z])\))/gi;
+    const tanMatches = [...text.matchAll(tanRegex)];
+    if (tanMatches.length > 0) {
+      const uniqueSources = [...new Set(tanMatches.map(m => m[1].trim()))];
+      const itemsPerSource = Math.ceil(allLineItems.length / uniqueSources.length) || 1;
+      
+      uniqueSources.forEach((src, idx) => {
+        const deductorLineItems = allLineItems.splice(0, itemsPerSource);
+        const totalCred = deductorLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
+
+        partB1.push({
+          sr_no: idx + 1,
+          information_code: 'TDS-194A',
+          information_description: 'Interest received on securities / TDS Transaction',
+          information_source: src,
+          total_amount_credited: totalCred,
+          line_items: deductorLineItems
+        });
+      });
+    }
+  }
+
+  // Step D: If line items exist but no TAN found, group under general deductor
+  if (partB1.length === 0 && allLineItems.length > 0) {
+    const totalCred = allLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
     partB1.push({
-      sr_no: parseInt(dedMatch[1], 10),
-      information_code: dedMatch[2].trim(),
-      information_description: dedMatch[3].trim(),
-      information_source: dedMatch[4].trim(),
-      total_amount_credited: parseNum(dedMatch[6]),
-      line_items: deductorLineItems
+      sr_no: 1,
+      information_code: 'TDS',
+      information_description: 'Tax Deducted at Source',
+      information_source: 'Deductor Entity',
+      total_amount_credited: totalCred,
+      line_items: allLineItems
     });
   }
 
@@ -577,14 +669,14 @@ function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsT
 function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayment[] {
   const partB3: PartB3TaxPayment[] = [];
 
-  // Pipe table parsing
+  // 1. Pipe table parsing
   lines.forEach(line => {
     if (line.includes('|') && (line.toLowerCase().includes('income tax') || line.toLowerCase().includes('self assessment') || /\d{7}/.test(line))) {
       const parts = line.split('|').map(p => p.trim());
-      if (parts.length >= 8 && !parts[0].toLowerCase().includes('sr')) {
+      if (parts.length >= 8 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('financial year')) {
         partB3.push({
           financial_year: parts[1] || '',
-          major_head: parts[2] || 'Income Tax',
+          major_head: parts[2] || 'Income Tax (Other than Companies)',
           minor_head: parts[3] || 'Self Assessment',
           tax_amount: parseNum(parts[4]),
           total_challan_amount: parseNum(parts[8] || parts[4]),
@@ -596,20 +688,48 @@ function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayme
     }
   });
 
-  // Regex fallback for challan records (bounded non-greedy match)
+  // 2. Space-delimited challan regex (from PDF text)
   if (partB3.length === 0) {
-    const challanRegex = /(\d{4}-\d{2})\s+([a-z\s()]+)\s+(Self\s+Assessment|Advance\s+Tax|Regular\s+Assessment)\s+([\d,.]+)[^\n\r]{0,80}?(\d{7})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)/gi;
-    let chMatch: RegExpExecArray | null;
-    while ((chMatch = challanRegex.exec(text)) !== null) {
+    const b3Regex = /(?:(\d+)\s+)?(\d{4}-\d{2})\s+([a-z\s()]+?)\s+([\d,.]+)(?:\s+[\d,.]+){1,5}\s+([\d,.]+)\s+(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})(?:\s+([a-z0-9]+))?/gi;
+    let b3Match: RegExpExecArray | null;
+    while ((b3Match = b3Regex.exec(text)) !== null) {
+      const rawHead = b3Match[3].trim();
+      let majorHead = 'Income Tax (Other than Companies)';
+      let minorHead = 'Self Assessment';
+
+      if (rawHead.toLowerCase().includes('advance')) {
+        minorHead = 'Advance Tax';
+      } else if (rawHead.toLowerCase().includes('regular')) {
+        minorHead = 'Regular Assessment';
+      }
+
       partB3.push({
-        financial_year: chMatch[1],
-        major_head: chMatch[2].trim(),
-        minor_head: chMatch[3].trim(),
-        tax_amount: parseNum(chMatch[4]),
-        total_challan_amount: parseNum(chMatch[4]),
-        bsr_code: chMatch[5],
-        date_of_deposit: chMatch[6],
-        challan_serial_number: parseInt(chMatch[7], 10)
+        financial_year: b3Match[2],
+        major_head: majorHead,
+        minor_head: minorHead,
+        tax_amount: parseNum(b3Match[4]),
+        total_challan_amount: parseNum(b3Match[5]),
+        bsr_code: b3Match[6],
+        date_of_deposit: b3Match[7],
+        challan_serial_number: parseInt(b3Match[8], 10)
+      });
+    }
+  }
+
+  // 3. Fallback: FY + BSR code (7 digits) + Date + Challan Serial
+  if (partB3.length === 0) {
+    const fallbackRegex = /(\d{4}-\d{2})[^\n\r\d]{1,60}?([\d,.]+)[^\n\r]{0,60}?(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})/gi;
+    let fbMatch: RegExpExecArray | null;
+    while ((fbMatch = fallbackRegex.exec(text)) !== null) {
+      partB3.push({
+        financial_year: fbMatch[1],
+        major_head: 'Income Tax (Other than Companies)',
+        minor_head: 'Self Assessment',
+        tax_amount: parseNum(fbMatch[2]),
+        total_challan_amount: parseNum(fbMatch[2]),
+        bsr_code: fbMatch[3],
+        date_of_deposit: fbMatch[4],
+        challan_serial_number: parseInt(fbMatch[5], 10)
       });
     }
   }
