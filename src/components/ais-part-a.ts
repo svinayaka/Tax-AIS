@@ -1,37 +1,40 @@
+import { PartAGeneralInfo } from '../types/ais';
+
 /**
  * <ais-part-a> Web Component
  * Renders Annual Information Statement (AIS) Part A - General Information
  * Styled using @svinayaka/siddi-design-system design tokens
  */
 export class AisPartA extends HTMLElement {
+  private _data: PartAGeneralInfo | null = null;
+
   constructor() {
     super();
-    this._data = null;
   }
 
-  static get observedAttributes() {
+  static get observedAttributes(): string[] {
     return ['tax-year'];
   }
 
-  set data(val) {
+  set data(val: PartAGeneralInfo | null) {
     this._data = val;
     this.render();
   }
 
-  get data() {
+  get data(): PartAGeneralInfo | null {
     return this._data;
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     this.render();
   }
 
-  attributeChangedCallback() {
+  attributeChangedCallback(): void {
     this.render();
   }
 
-  render() {
-    const d = this._data || {};
+  render(): void {
+    const d = this._data || {} as Partial<PartAGeneralInfo>;
     const taxYear = this.getAttribute('tax-year') || '2026-27';
 
     this.className = 'ais-part-section';
@@ -103,7 +106,7 @@ export class AisPartA extends HTMLElement {
   }
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: string | null | undefined): string {
   if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')

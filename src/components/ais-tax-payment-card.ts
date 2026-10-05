@@ -1,28 +1,31 @@
+import { PartB3TaxPayment } from '../types/ais';
+
 /**
  * <ais-tax-payment-card> Web Component
  * Renders AIS Part B3 Tax Payments (Challans)
  * Styled using @svinayaka/siddi-design-system design tokens
  */
 export class AisTaxPaymentCard extends HTMLElement {
+  private _payments: PartB3TaxPayment[] = [];
+
   constructor() {
     super();
-    this._payments = [];
   }
 
-  set payments(val) {
+  set payments(val: PartB3TaxPayment[] | null) {
     this._payments = val || [];
     this.render();
   }
 
-  get payments() {
+  get payments(): PartB3TaxPayment[] {
     return this._payments;
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     this.render();
   }
 
-  render() {
+  render(): void {
     const list = this._payments || [];
 
     this.className = 'ais-part-section';
@@ -62,7 +65,7 @@ export class AisTaxPaymentCard extends HTMLElement {
                   <td><strong>₹${Number(ch.total_challan_amount || ch.tax_amount).toLocaleString('en-IN')}</strong></td>
                   <td class="font-mono">${escapeHtml(ch.bsr_code)}</td>
                   <td>${escapeHtml(ch.date_of_deposit)}</td>
-                  <td class="font-mono">${escapeHtml(ch.challan_serial_number)}</td>
+                  <td class="font-mono">${escapeHtml(String(ch.challan_serial_number))}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -78,7 +81,7 @@ export class AisTaxPaymentCard extends HTMLElement {
   }
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: string | null | undefined): string {
   if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')

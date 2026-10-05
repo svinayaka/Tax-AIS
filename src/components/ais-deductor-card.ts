@@ -1,29 +1,32 @@
+import { PartB1TdsTcsTransaction } from '../types/ais';
+
 /**
  * <ais-deductor-card> Web Component
  * Renders AIS Part B1 Deductor card with nested quarterly line items
  * Styled with @svinayaka/siddi-design-system tokens
  */
 export class AisDeductorCard extends HTMLElement {
+  private _deductor: PartB1TdsTcsTransaction | null = null;
+
   constructor() {
     super();
-    this._deductor = null;
   }
 
-  set deductor(val) {
+  set deductor(val: PartB1TdsTcsTransaction | null) {
     this._deductor = val;
     this.render();
   }
 
-  get deductor() {
+  get deductor(): PartB1TdsTcsTransaction | null {
     return this._deductor;
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     this.render();
   }
 
-  render() {
-    const d = this._deductor || {};
+  render(): void {
+    const d = this._deductor || {} as Partial<PartB1TdsTcsTransaction>;
     const lineItems = d.line_items || [];
     const total = d.total_amount_credited || d.total_amount || 0;
 
@@ -83,7 +86,7 @@ export class AisDeductorCard extends HTMLElement {
   }
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: string | null | undefined): string {
   if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')

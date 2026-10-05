@@ -3,19 +3,19 @@
  * Stencil-compatible Custom Element styled with @svinayaka/siddi-design-system tokens
  */
 export class AisKpiCard extends HTMLElement {
-  static get observedAttributes() {
+  static get observedAttributes(): string[] {
     return ['title', 'value', 'icon', 'badge', 'color'];
   }
 
-  connectedCallback() {
+  connectedCallback(): void {
     this.render();
   }
 
-  attributeChangedCallback() {
+  attributeChangedCallback(): void {
     this.render();
   }
 
-  render() {
+  render(): void {
     const title = this.getAttribute('title') || '';
     const value = this.getAttribute('value') || '0';
     const icon = this.getAttribute('icon') || 'activity';

@@ -1,5 +1,14 @@
+export interface SampleDocument {
+  id: string;
+  title: string;
+  type: string;
+  badge: string;
+  icon: string;
+  rawText: string;
+}
+
 // Sample documents for instant 1-click testing & demo
-export const SAMPLE_DOCUMENTS = [
+export const SAMPLE_DOCUMENTS: SampleDocument[] = [
   {
     id: 'ais',
     title: 'Income Tax Dept - Annual Information Statement (AIS - Form 168)',

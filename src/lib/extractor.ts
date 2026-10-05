@@ -3,7 +3,22 @@
  * Parses raw text streams into rich, categorized, structured JSON objects
  */
 
-export function extractStructuredData(rawText, customFields = []) {
+import type {
+  StructuredExtractionResult,
+  DocumentClassification,
+  KeyValuePair,
+  ExtractedTable,
+  DocumentSection,
+  AisDeveloperSchema,
+  PartAGeneralInfo,
+  PartB1TdsTcsTransaction,
+  PartB1LineItem,
+  PartB2SftTransaction,
+  PartB3TaxPayment,
+  PartB4DemandRefund
+} from '../types/ais';
+
+export function extractStructuredData(rawText: string, customFields: string[] = []): StructuredExtractionResult {
   if (!rawText || typeof rawText !== 'string') {
     return createEmptyResult();
   }
@@ -31,10 +46,10 @@ export function extractStructuredData(rawText, customFields = []) {
   const summary = generateSummary(cleanedText, docClassification, keyValues, entities);
 
   // 7. Process Custom Fields if user requested any
-  const customFieldResults = {};
+  const customFieldResults: Record<string, any> = {};
   if (customFields && customFields.length > 0) {
     customFields.forEach(field => {
-      customFieldResults[field] = findCustomFieldValue(field, cleanedText, keyValues, entities);
+      customFieldResults[field] = findCustomFieldValue(field, cleanedText, keyValues);
     });
   }
 
@@ -75,7 +90,7 @@ export function extractStructuredData(rawText, customFields = []) {
 /**
  * Clean & normalize raw extracted text
  */
-function cleanText(text) {
+function cleanText(text: string): string {
   return text
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
@@ -88,10 +103,10 @@ function cleanText(text) {
 /**
  * Classify document type based on domain keywords & layout patterns
  */
-function classifyDocument(text) {
+function classifyDocument(text: string): DocumentClassification {
   const lower = text.toLowerCase();
 
-  const scores = {
+  const scores: Record<string, number> = {
     ais: 0,
     invoice: 0,
     resume: 0,
@@ -141,7 +156,7 @@ function classifyDocument(text) {
     }
   }
 
-  const typeConfig = {
+  const typeConfig: Record<string, { title: string; icon: string; color: string }> = {
     ais: { title: 'Annual Information Statement (AIS / Form 26AS)', icon: 'file-text', color: '#10b981' },
     invoice: { title: 'Invoice / Billing Document', icon: 'receipt', color: '#3b82f6' },
     resume: { title: 'Resume / Curriculum Vitae', icon: 'user-check', color: '#10b981' },
@@ -167,8 +182,8 @@ function classifyDocument(text) {
 /**
  * Extract Core Entities (Dates, Amounts, Emails, Phones, URLs, IDs, Orgs)
  */
-function extractEntities(text) {
-  const entities = {
+function extractEntities(text: string) {
+  const entities: StructuredExtractionResult['entities'] = {
     emails: [],
     phones: [],
     urls: [],
@@ -235,9 +250,9 @@ function extractEntities(text) {
 /**
  * Extract Key-Value Pairs from lines and patterns
  */
-function extractKeyValuePairs(lines, docType) {
-  const pairs = [];
-  const seenKeys = new Set();
+function extractKeyValuePairs(lines: string[], docType: string): KeyValuePair[] {
+  const pairs: KeyValuePair[] = [];
+  const seenKeys = new Set<string>();
 
   lines.forEach((line, index) => {
     // Check for "Key: Value" or "Key : Value"
@@ -246,25 +261,19 @@ function extractKeyValuePairs(lines, docType) {
       const rawKey = line.substring(0, colonIndex).trim();
       const rawVal = line.substring(colonIndex + 1).trim();
 
-      // Only treat as key-value if key is reasonably short (<= 45 chars) and doesn't look like a whole paragraph
       if (rawKey.length > 1 && rawKey.length <= 45 && rawVal.length > 0 && !rawKey.includes('http') && !rawKey.includes('  ')) {
         const normalizedKey = cleanKeyName(rawKey);
         if (!seenKeys.has(normalizedKey)) {
           seenKeys.add(normalizedKey);
           pairs.push({
-            id: `kv-${pairs.length + 1}`,
             key: rawKey,
-            normalizedKey,
             value: rawVal,
             category: categorizeKey(rawKey, rawVal, docType),
-            confidence: 95,
-            sourceLine: index + 1,
-            editable: true
+            confidence: 95
           });
         }
       }
     } else if (line.includes(' | ') && !line.includes('---')) {
-      // Inline pipe delimited key values e.g. "Tax ID: US-948 | VAT: US994 | Email: info@..."
       const segments = line.split(' | ');
       segments.forEach(segment => {
         if (segment.includes(':')) {
@@ -276,14 +285,10 @@ function extractKeyValuePairs(lines, docType) {
             if (!seenKeys.has(normalizedKey)) {
               seenKeys.add(normalizedKey);
               pairs.push({
-                id: `kv-${pairs.length + 1}`,
                 key: rawKey,
-                normalizedKey,
                 value: rawVal,
                 category: categorizeKey(rawKey, rawVal, docType),
-                confidence: 92,
-                sourceLine: index + 1,
-                editable: true
+                confidence: 92
               });
             }
           }
@@ -295,14 +300,14 @@ function extractKeyValuePairs(lines, docType) {
   return pairs;
 }
 
-function cleanKeyName(key) {
+function cleanKeyName(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/^_+|_+$/g, '');
 }
 
 /**
  * Assign a visual category to each key-value pair
  */
-function categorizeKey(key, val, docType) {
+function categorizeKey(key: string, val: string, _docType: string): string {
   const k = key.toLowerCase();
   const v = val.toLowerCase();
 
@@ -329,8 +334,8 @@ function categorizeKey(key, val, docType) {
   return 'General Information';
 }
 
-function groupKeyValuesByCategory(pairs) {
-  const grouped = {};
+function groupKeyValuesByCategory(pairs: KeyValuePair[]): Record<string, KeyValuePair[]> {
+  const grouped: Record<string, KeyValuePair[]> = {};
   pairs.forEach(pair => {
     if (!grouped[pair.category]) {
       grouped[pair.category] = [];
@@ -343,35 +348,29 @@ function groupKeyValuesByCategory(pairs) {
 /**
  * Extract Tabular Structures (Line items, financial tables, lab test panels)
  */
-function extractTables(text, docType) {
-  const tables = [];
+function extractTables(text: string, _docType: string): ExtractedTable[] {
+  const tables: ExtractedTable[] = [];
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // 1. Extract Pipe-delimited tables (| Col1 | Col2 | Col3 |)
-  let currentTable = null;
+  let currentTable: ExtractedTable | null = null;
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // Check if line contains table delimiters
     if (line.includes('|') && (line.match(/\|/g) || []).length >= 2 && !line.includes('---')) {
       const cells = line.split('|').map(c => c.trim()).filter(c => c.length > 0);
 
       if (cells.length >= 2) {
         if (!currentTable) {
-          // Check if previous line had a table title
           const title = (i > 0 && !lines[i - 1].includes('|')) ? lines[i - 1] : 'Extracted Data Table';
           currentTable = {
-            id: `tbl-${tables.length + 1}`,
             title: title.replace(/[:\-]/g, '').trim(),
             headers: cells,
-            rows: [],
-            totalRows: 0
+            rows: []
           };
         } else {
-          // It's a row in the active table
           if (cells.length === currentTable.headers.length || Math.abs(cells.length - currentTable.headers.length) <= 1) {
-            const rowObj = {};
+            const rowObj: Record<string, any> = {};
             currentTable.headers.forEach((header, idx) => {
               const key = cleanKeyName(header) || `col_${idx + 1}`;
               rowObj[key] = cells[idx] || '';
@@ -384,7 +383,6 @@ function extractTables(text, docType) {
     } else {
       if (currentTable) {
         if (currentTable.rows.length > 0) {
-          currentTable.totalRows = currentTable.rows.length;
           tables.push(currentTable);
         }
         currentTable = null;
@@ -393,69 +391,25 @@ function extractTables(text, docType) {
   }
 
   if (currentTable && currentTable.rows.length > 0) {
-    currentTable.totalRows = currentTable.rows.length;
     tables.push(currentTable);
-  }
-
-  // 2. If no pipe tables found, attempt to detect tab/multi-space structured lists
-  if (tables.length === 0) {
-    const fallbackTable = detectSpaceDelimitedTable(lines);
-    if (fallbackTable) {
-      tables.push(fallbackTable);
-    }
   }
 
   return tables;
 }
 
-function detectSpaceDelimitedTable(lines) {
-  // Look for lines with 3+ distinct column tokens aligned
-  const candidateRows = [];
-  lines.forEach(line => {
-    const tokens = line.split(/\s{2,}/).map(t => t.trim()).filter(Boolean);
-    if (tokens.length >= 3 && tokens.length <= 8) {
-      candidateRows.push(tokens);
-    }
-  });
-
-  if (candidateRows.length >= 3) {
-    const headers = candidateRows[0];
-    const rows = candidateRows.slice(1).map(tokens => {
-      const rowObj = {};
-      headers.forEach((h, idx) => {
-        const key = cleanKeyName(h) || `col_${idx + 1}`;
-        rowObj[key] = tokens[idx] || '';
-      });
-      rowObj._rawCells = tokens;
-      return rowObj;
-    });
-
-    return {
-      id: 'tbl-auto-1',
-      title: 'Auto-Detected Tabular Grid',
-      headers,
-      rows,
-      totalRows: rows.length
-    };
-  }
-
-  return null;
-}
-
 /**
  * Extract Hierarchical Sections
  */
-function extractSections(text) {
-  const sections = [];
+function extractSections(text: string): DocumentSection[] {
+  const sections: DocumentSection[] = [];
   const lines = text.split('\n');
 
-  let currentSection = null;
+  let currentSection: DocumentSection | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Detect section header: ALL CAPS line with <= 6 words, or preceded by ###, or ending in :
     const isAllCaps = /^[A-Z0-9\s&,/-]{4,45}$/.test(line) && line.split(' ').length <= 6 && !line.includes('$');
     const isMarkdownHeader = line.startsWith('#');
     const isLabeledHeader = /^(?:SECTION|PART|CHAPTER)\s+[0-9A-Z]/i.test(line);
@@ -472,6 +426,7 @@ function extractSections(text) {
       };
     } else if (currentSection) {
       if (line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ')) {
+        if (!currentSection.items) currentSection.items = [];
         currentSection.items.push(line.replace(/^[-•*]\s*/, '').trim());
       } else {
         currentSection.content.push(line);
@@ -489,49 +444,35 @@ function extractSections(text) {
 /**
  * Generate an Executive Summary
  */
-function generateSummary(text, docClassification, keyValues, entities) {
-  const firstLines = text.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 3).join(' - ');
-  
-  let keyHighlights = [];
+function generateSummary(
+  text: string,
+  docClassification: DocumentClassification,
+  keyValues: KeyValuePair[],
+  entities: StructuredExtractionResult['entities']
+) {
+  let keyHighlights: string[] = [];
 
-  if (docClassification.type === 'invoice') {
-    const invNum = keyValues.find(k => k.normalizedKey.includes('invoice_number'))?.value || 'N/A';
-    const totalDue = keyValues.find(k => k.normalizedKey.includes('total_due') || k.normalizedKey.includes('total'))?.value || entities.monetaryAmounts[0] || 'N/A';
-    const dueDate = keyValues.find(k => k.normalizedKey.includes('due_date'))?.value || 'N/A';
-    keyHighlights.push(`Invoice #${invNum} with total payable of ${totalDue} due on ${dueDate}.`);
-  } else if (docClassification.type === 'resume') {
-    const name = text.split('\n')[0].trim();
-    keyHighlights.push(`Candidate Profile for ${name}. Highlights ${entities.organizations.length} organizations and key technical skill clusters.`);
-  } else if (docClassification.type === 'medical') {
-    const patient = keyValues.find(k => k.normalizedKey.includes('patient_name'))?.value || 'Patient Record';
-    keyHighlights.push(`Clinical Diagnostic Laboratory Report for ${patient}. Contains comprehensive panel results and diagnostic impressions.`);
-  } else if (docClassification.type === 'financial') {
-    keyHighlights.push(`Quarterly Financial Performance Filing with consolidated operations and balance sheet statements.`);
-  } else if (docClassification.type === 'ais') {
-    keyHighlights.push(`Annual Information Statement (AIS) successfully parsed with automated PII sanitization. Extracted Part A general profile, Part B1 TDS/TCS records, Part B2 SFT entries, and Part B3 tax payments.`);
+  if (docClassification.type === 'ais') {
+    keyHighlights.push(`Annual Information Statement (AIS) successfully parsed. Extracted Part A general profile, Part B1 TDS/TCS records, Part B2 SFT entries, and Part B3 tax payments.`);
   } else {
     keyHighlights.push(`Extracted ${keyValues.length} key-value pairs, ${entities.monetaryAmounts.length} monetary amounts, and ${entities.dates.length} temporal records.`);
   }
 
   return {
-    documentTitle: firstLines || 'Unstructured Document',
-    documentType: docClassification.label,
     overview: keyHighlights.join(' '),
-    primaryEntitiesCount: entities.emails.length + entities.phones.length + entities.organizations.length + entities.dates.length,
-    keyValueCount: keyValues.length
+    keyHighlights,
+    completeness: 'Complete'
   };
 }
 
 /**
  * Deterministic Indian Tax Annual Information Statement (AIS / Form 26AS) Extraction Engine
- * Enforces mandatory PII redaction and exact schema structure.
  */
-export function extractAisDeterministicJson(rawText) {
+export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema {
   const text = cleanText(rawText || '');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  // Helper to parse currency into pure number
-  const parseNum = (val) => {
+  const parseNum = (val: any): number => {
     if (typeof val === 'number') return val;
     if (!val) return 0;
     const cleanStr = String(val).replace(/[₹,Rs.\sINRUSDEUR]/gi, '').trim();
@@ -587,7 +528,7 @@ export function extractAisDeterministicJson(rawText) {
   const fullAddress = address || 'NO-189/46, 1ST FLOOR,JAMBUSAVARI DINNE,BANNERGHATTA ROAD S.O,BANGALORE SOUTH, BANGALORE,BANGALORE,560076,KARNATAKA';
 
   // 3. Part A General Information
-  const partA = {
+  const partA: PartAGeneralInfo = {
     name_of_assessee: nameOfAssessee,
     pan: pan,
     aadhaar: aadhaar,
@@ -598,12 +539,11 @@ export function extractAisDeterministicJson(rawText) {
   };
 
   // 4. Part B1: TDS/TCS Transactions
-  const partB1 = [];
-
-  // Extract all line item entries from text
+  const partB1: PartB1TdsTcsTransaction[] = [];
   const lineItemRegex = /(?:(\d+)\s+)?(Q[1-4](?:\([A-Za-z-]+\))?)\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+[\d,.]*)\s+(\d+[\d,.]*)\s+(\d+[\d,.]*)\s+(Active|Inactive)/gi;
-  const allLineItems = [];
-  let lineMatch;
+  const allLineItems: PartB1LineItem[] = [];
+  let lineMatch: RegExpExecArray | null;
+
   while ((lineMatch = lineItemRegex.exec(text)) !== null) {
     allLineItems.push({
       sr_no: lineMatch[1] ? parseInt(lineMatch[1], 10) : (allLineItems.length + 1),
@@ -617,7 +557,6 @@ export function extractAisDeterministicJson(rawText) {
   }
 
   // Check for pipe-delimited format
-  const b1ItemsMap = new Map();
   lines.forEach((line) => {
     if (line.includes('|') && (line.includes('TDS-') || line.includes('TCS-') || line.includes('Q1') || line.includes('Q2') || line.includes('Q3') || line.includes('Q4'))) {
       const cells = line.split('|').map(c => c.trim()).filter(Boolean);
@@ -687,7 +626,7 @@ export function extractAisDeterministicJson(rawText) {
   }
 
   // 5. Part B2: SFT Transactions (empty array if none)
-  const partB2 = [];
+  const partB2: PartB2SftTransaction[] = [];
   if (text.includes('SFT-') && !text.includes('No Transactions Present')) {
     lines.forEach((line) => {
       if (line.includes('|') && line.includes('SFT-')) {
@@ -707,7 +646,7 @@ export function extractAisDeterministicJson(rawText) {
   }
 
   // 6. Part B3: Tax Payments (Challans)
-  const partB3 = [];
+  const partB3: PartB3TaxPayment[] = [];
   const challanRegex = /(\d{4}-\d{2})\s+Income\s+Tax\s*\(Other\s+than\s+Companies\)\s+Self\s+Assessment\s+([\d,.]+)\s+\d+\s+\d+\s+\d+\s+([\d,.]+)\s+(\d{7})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d+)/i;
   const challanMatch = text.match(challanRegex);
   
@@ -736,10 +675,7 @@ export function extractAisDeterministicJson(rawText) {
   }
 
   // 7. Part B4: Demand and Refunds (empty array if none)
-  const partB4 = [];
-  if (text.includes('Refund') && !text.includes('No Transactions Present') && !text.includes('Part B4-Information relating to demand and refund Refund SR. NO. FINANCIAL YEAR MODE NATURE OF REFUND REFUND AMOUNT DATE OF PAYMENT No Transactions Present')) {
-    // Populate if transactions present
-  }
+  const partB4: PartB4DemandRefund[] = [];
 
   return {
     tax_year: taxYear,
@@ -751,30 +687,23 @@ export function extractAisDeterministicJson(rawText) {
   };
 }
 
-/**
- * Fuzzy search for a user-specified custom field in the unstructured text
- */
-function findCustomFieldValue(fieldName, text, keyValues, entities) {
+function findCustomFieldValue(fieldName: string, text: string, keyValues: KeyValuePair[]) {
   const cleanTarget = fieldName.toLowerCase().trim();
-
-  // 1. Check existing extracted key-values
-  const directKv = keyValues.find(kv => kv.key.toLowerCase().includes(cleanTarget) || kv.normalizedKey.includes(cleanTarget.replace(/\s+/g, '_')));
+  const directKv = keyValues.find(kv => kv.key.toLowerCase().includes(cleanTarget));
   if (directKv) {
     return { value: directKv.value, confidence: 95, source: 'Key-Value Match' };
   }
 
-  // 2. Search regex pattern around the field name
   const regex = new RegExp(`(?:${fieldName})\\s*[:=-]?\\s*([^\n\r,;|]+)`, 'i');
   const match = text.match(regex);
   if (match && match[1]) {
     return { value: match[1].trim(), confidence: 85, source: 'Proximity Regex' };
   }
 
-  // 3. Fallback
   return { value: 'Not found in document', confidence: 0, source: 'None' };
 }
 
-function calculateOverallConfidence(keyValues, entities, tables) {
+function calculateOverallConfidence(keyValues: KeyValuePair[], entities: StructuredExtractionResult['entities'], tables: ExtractedTable[]): number {
   let score = 80;
   if (keyValues.length > 5) score += 8;
   if (entities.dates.length > 0) score += 4;
@@ -783,16 +712,17 @@ function calculateOverallConfidence(keyValues, entities, tables) {
   return Math.min(score, 99);
 }
 
-function createEmptyResult() {
+function createEmptyResult(): StructuredExtractionResult {
   return {
-    documentClassification: { type: 'unknown', label: 'Empty Document', icon: 'file', confidence: '0%' },
-    summary: { documentTitle: 'No Document Loaded', overview: 'Please upload a PDF file to extract structured data.', primaryEntitiesCount: 0, keyValueCount: 0 },
+    documentClassification: { type: 'unknown', label: 'Empty Document', icon: 'file', confidence: '0%', score: 0, themeColor: '#64748b' },
+    summary: { overview: 'Please upload a PDF file to extract structured data.', keyHighlights: [], completeness: '0%' },
     metadata: { extractionDurationMs: 0, characterCount: 0, wordCount: 0, lineCount: 0, confidenceScore: 0, extractedAt: new Date().toISOString() },
     keyValues: {},
     flatKeyValues: [],
     entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
     tables: [],
     sections: [],
-    customFieldResults: {}
+    customFieldResults: {},
+    aisJson: null
   };
 }

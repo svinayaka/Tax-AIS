@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview"
   },
   "repository": {
@@ -28,6 +28,9 @@
   "author": "Siddi Vinayaka",
   "license": "MIT",
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
     "vite": "^8.3.0"
   },
   "dependencies": {
@@ -38,4 +41,3 @@
     "pdfjs-dist": "^6.4.299"
   }
 }
-

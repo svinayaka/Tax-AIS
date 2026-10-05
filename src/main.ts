@@ -1,18 +1,33 @@
 import { createIcons, icons } from 'lucide';
 import confetti from 'canvas-confetti';
 
-import { parsePdfDocument, renderPageToCanvas } from './lib/pdf-parser.js';
-import { extractStructuredData } from './lib/extractor.js';
-import { SAMPLE_DOCUMENTS } from './lib/sample-data.js';
-import { exportToJson, exportToCsv, exportToMarkdown, downloadFile } from './lib/exporter.js';
+import { parsePdfDocument, renderPageToCanvas } from './lib/pdf-parser';
+import { extractStructuredData } from './lib/extractor';
+import { SAMPLE_DOCUMENTS } from './lib/sample-data';
+import { exportToJson, exportToCsv, exportToMarkdown, downloadFile } from './lib/exporter';
 
 // Import Siddi-compliant Stencil / Web Components
-import './components/index.js';
+import './components/index';
+import { AisPartA } from './components/ais-part-a';
+import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
+import { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
 
 // ==========================================================================
-// Application State
+// Application State Interface & Object
 // ==========================================================================
-const state = {
+interface AppState {
+  theme: string;
+  currentFile: File | { name: string } | null;
+  rawText: string;
+  pdfDoc: any;
+  currentPageNum: number;
+  totalPages: number;
+  currentZoom: number;
+  structuredData: StructuredExtractionResult | null;
+  activeTab: string;
+}
+
+const state: AppState = {
   theme: localStorage.getItem('documorph_theme') || 'dark',
   currentFile: null,
   rawText: '',
@@ -25,14 +40,14 @@ const state = {
 };
 
 // Initialize Icons Helper
-function refreshIcons() {
+function refreshIcons(): void {
   createIcons({ icons });
 }
 
 // ==========================================================================
 // Toast Notification Engine
 // ==========================================================================
-function showToast(message, type = 'info', duration = 3000) {
+function showToast(message: string, type: 'info' | 'success' | 'error' = 'info', duration: number = 3000): void {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
@@ -58,7 +73,7 @@ function showToast(message, type = 'info', duration = 3000) {
 // ==========================================================================
 // Theme Management
 // ==========================================================================
-function initTheme() {
+function initTheme(): void {
   document.documentElement.setAttribute('data-theme', state.theme);
   document.documentElement.setAttribute('data-ksv-ds-theme', state.theme);
   const toggleBtn = document.getElementById('themeToggleBtn');
@@ -76,12 +91,12 @@ function initTheme() {
 // ==========================================================================
 // PDF Password Handling
 // ==========================================================================
-let pendingPasswordResolver = null;
+let pendingPasswordResolver: { resolve: (password: string | null) => void } | null = null;
 
-function promptForPdfPassword(isRetry = false) {
+function promptForPdfPassword(isRetry: boolean = false): Promise<string | null> {
   return new Promise((resolve) => {
     const backdrop = document.getElementById('passwordModalBackdrop');
-    const input = document.getElementById('aisPasswordInput');
+    const input = document.getElementById('aisPasswordInput') as HTMLInputElement | null;
     const errorMsg = document.getElementById('passwordErrorMsg');
     
     if (!backdrop || !input) {
@@ -103,7 +118,7 @@ function promptForPdfPassword(isRetry = false) {
   });
 }
 
-function closePasswordModal(cancelled = false) {
+function closePasswordModal(cancelled: boolean = false): void {
   const backdrop = document.getElementById('passwordModalBackdrop');
   if (backdrop) backdrop.classList.add('hidden');
   if (pendingPasswordResolver) {
@@ -117,24 +132,26 @@ function closePasswordModal(cancelled = false) {
 // ==========================================================================
 // PDF Parsing & Extraction Orchestrator
 // ==========================================================================
-async function handlePdfUpload(file) {
+async function handlePdfUpload(file: File): Promise<void> {
   const overlay = document.getElementById('uploadProgressOverlay');
   const fill = document.getElementById('progressBarFill');
   const title = document.getElementById('progressStatusTitle');
   const detail = document.getElementById('progressStatusDetail');
 
-  overlay.classList.remove('hidden');
+  if (overlay) overlay.classList.remove('hidden');
 
   try {
     const parseResult = await parsePdfDocument(
       file,
       ({ stage, percent, message }) => {
-        fill.style.width = `${percent}%`;
-        detail.textContent = message;
-        if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
-        if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
-        if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
-        if (stage === 'finishing') title.textContent = 'Sanitizing PII & Building JSON...';
+        if (fill) fill.style.width = `${percent}%`;
+        if (detail) detail.textContent = message;
+        if (title) {
+          if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
+          if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
+          if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
+          if (stage === 'finishing') title.textContent = 'Sanitizing PII & Building JSON...';
+        }
       },
       null,
       promptForPdfPassword
@@ -156,10 +173,12 @@ async function handlePdfUpload(file) {
     // Render PDF first page in canvas
     if (state.pdfDoc) {
       const page = await state.pdfDoc.getPage(1);
-      const canvas = document.getElementById('pdfPageCanvas');
-      document.getElementById('pdfNoPreviewMessage').classList.add('hidden');
-      canvas.classList.remove('hidden');
-      await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+      document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
+      if (canvas) {
+        canvas.classList.remove('hidden');
+        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      }
       updatePdfNavControls();
     }
 
@@ -167,15 +186,15 @@ async function handlePdfUpload(file) {
     triggerConfetti();
     showToast('AIS Part A & Part B extracted successfully with PII scrubbing!', 'success');
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error parsing AIS PDF:', error);
-    showToast(`Failed to parse AIS PDF: ${error.message || 'Unknown error'}`, 'error', 4000);
+    showToast(`Failed to parse AIS PDF: ${error?.message || 'Unknown error'}`, 'error', 4000);
   } finally {
-    overlay.classList.add('hidden');
+    if (overlay) overlay.classList.add('hidden');
   }
 }
 
-async function loadReferenceAisPdf() {
+async function loadReferenceAisPdf(): Promise<void> {
   try {
     const response = await fetch('/src/assets/XXXPV2797X_2026-27_AIS_unlocked.pdf');
     if (!response.ok) {
@@ -192,7 +211,7 @@ async function loadReferenceAisPdf() {
   }
 }
 
-function handleLoadSample(sampleId) {
+function handleLoadSample(sampleId: string): void {
   const sample = SAMPLE_DOCUMENTS.find(s => s.id === sampleId) || SAMPLE_DOCUMENTS[0];
   if (!sample) return;
 
@@ -201,13 +220,13 @@ function handleLoadSample(sampleId) {
   const title = document.getElementById('progressStatusTitle');
   const detail = document.getElementById('progressStatusDetail');
 
-  overlay.classList.remove('hidden');
-  fill.style.width = '30%';
-  title.textContent = 'Loading Reference AIS...';
-  detail.textContent = 'Extracting Part A & Part B...';
+  if (overlay) overlay.classList.remove('hidden');
+  if (fill) fill.style.width = '30%';
+  if (title) title.textContent = 'Loading Reference AIS...';
+  if (detail) detail.textContent = 'Extracting Part A & Part B...';
 
   setTimeout(() => {
-    fill.style.width = '100%';
+    if (fill) fill.style.width = '100%';
 
     state.currentFile = { name: 'XXXPV2797X_2026-27_AIS_unlocked.pdf' };
     state.rawText = sample.rawText;
@@ -227,14 +246,14 @@ function handleLoadSample(sampleId) {
     }
 
     renderAllViews('Annual Information Statement (AIS - Form 168)');
-    overlay.classList.add('hidden');
+    if (overlay) overlay.classList.add('hidden');
 
     triggerConfetti();
     showToast('Loaded Reference AIS (Tax Year 2026-27)!', 'success');
   }, 250);
 }
 
-function triggerConfetti() {
+function triggerConfetti(): void {
   confetti({
     particleCount: 50,
     spread: 60,
@@ -246,38 +265,53 @@ function triggerConfetti() {
 // ==========================================================================
 // Rendering Pipeline
 // ==========================================================================
-function renderAllViews(fileName) {
+function renderAllViews(_fileName: string): void {
   const data = state.structuredData;
   if (!data) return;
 
-  const ais = data.aisJson || {};
-  const partA = ais.part_a_general_info || {};
+  const ais = data.aisJson || {} as AisDeveloperSchema;
+  const partA = ais.part_a_general_info || { name_of_assessee: '', pan: '' };
   const partB1 = ais.part_b1_tds_tcs_transactions || [];
   const partB3 = ais.part_b3_tax_payments || [];
 
   // Reveal Workspace
   const workspace = document.getElementById('resultsWorkspace');
-  workspace.classList.remove('hidden');
-  workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (workspace) {
+    workspace.classList.remove('hidden');
+    workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   // 1. Header Banner
-  document.getElementById('docTitleHeading').textContent = `Annual Information Statement (AIS - Form 168)`;
-  document.getElementById('taxYearBannerBadge').textContent = `Tax Year: ${ais.tax_year || '2026-27'}`;
-  document.getElementById('docSummaryText').textContent = `Assessee: ${partA.name_of_assessee} (PAN: ${partA.pan}), ${partB1.length} TDS Deductor source(s), ${partB3.length} Tax Payment challan(s) extracted.`;
+  const titleEl = document.getElementById('docTitleHeading');
+  const yearEl = document.getElementById('taxYearBannerBadge');
+  const summaryEl = document.getElementById('docSummaryText');
+
+  if (titleEl) titleEl.textContent = `Annual Information Statement (AIS - Form 168)`;
+  if (yearEl) yearEl.textContent = `Tax Year: ${ais.tax_year || '2026-27'}`;
+  if (summaryEl) {
+    summaryEl.textContent = `Assessee: ${partA.name_of_assessee} (PAN: ${partA.pan}), ${partB1.length} TDS Deductor source(s), ${partB3.length} Tax Payment challan(s) extracted.`;
+  }
 
   // 2. Render KPI Cards
   const totalCredited = partB1.reduce((sum, d) => sum + (d.total_amount_credited || d.total_amount || 0), 0);
   const totalTaxPaid = partB3.reduce((sum, ch) => sum + (ch.tax_amount || 0), 0);
 
-  document.getElementById('kpiTdsCount').textContent = partB1.length;
-  document.getElementById('kpiTotalCredited').textContent = `₹${totalCredited.toLocaleString('en-IN')}`;
-  document.getElementById('kpiTaxPaid').textContent = `₹${totalTaxPaid.toLocaleString('en-IN')}`;
+  const kpiCount = document.getElementById('kpiTdsCount');
+  const kpiCredited = document.getElementById('kpiTotalCredited');
+  const kpiPaid = document.getElementById('kpiTaxPaid');
+
+  if (kpiCount) kpiCount.textContent = String(partB1.length);
+  if (kpiCredited) kpiCredited.textContent = `₹${totalCredited.toLocaleString('en-IN')}`;
+  if (kpiPaid) kpiPaid.textContent = `₹${totalTaxPaid.toLocaleString('en-IN')}`;
 
   // 3. Render AIS Dashboard (Part A & Part B)
   renderAisDashboard(ais);
 
   // 4. Render JSON Schema Tab
-  document.getElementById('fullJsonDisplay').textContent = exportToJson(data, true);
+  const jsonDisplay = document.getElementById('fullJsonDisplay');
+  if (jsonDisplay) {
+    jsonDisplay.textContent = exportToJson(data, true);
+  }
 
   refreshIcons();
 }
@@ -285,37 +319,36 @@ function renderAllViews(fileName) {
 /**
  * Render Ultra-Elegant AIS Tax Intelligence Dashboard
  */
-function renderAisDashboard(ais) {
-    const container = document.getElementById('aisDashboardContainer');
-    if (!container) return;
+function renderAisDashboard(ais: AisDeveloperSchema): void {
+  const container = document.getElementById('aisDashboardContainer');
+  if (!container) return;
 
-    const partA = ais.part_a_general_info || {};
-    const partB1 = ais.part_b1_tds_tcs_transactions || [];
-    const partB2 = ais.part_b2_sft_transactions || [];
-    const partB3 = ais.part_b3_tax_payments || [];
-    const partB4 = ais.part_b4_demand_refunds || [];
+  const partA = ais.part_a_general_info || {} as any;
+  const partB1 = ais.part_b1_tds_tcs_transactions || [];
+  const partB2 = ais.part_b2_sft_transactions || [];
+  const partB3 = ais.part_b3_tax_payments || [];
+  const partB4 = ais.part_b4_demand_refunds || [];
 
-    let html = `
-      <div class="ais-dashboard-wrapper">
-        
-        <!-- Assessee Info Banner -->
-        <div class="ais-pii-banner">
-          <div class="ais-pii-info">
-            <i data-lucide="shield-check" class="ais-pii-icon"></i>
-            <div>
-              <h4 class="ais-pii-title">Annual Information Statement (AIS - Form 168)</h4>
-              <p class="ais-pii-desc">Assessee profile (Part A) and tax transaction breakdown (Part B) extracted directly from Income Tax Department document.</p>
-            </div>
+  let html = `
+    <div class="ais-dashboard-wrapper">
+      
+      <!-- Assessee Info Banner -->
+      <div class="ais-pii-banner">
+        <div class="ais-pii-info">
+          <i data-lucide="shield-check" class="ais-pii-icon"></i>
+          <div>
+            <h4 class="ais-pii-title">Annual Information Statement (AIS - Form 168)</h4>
+            <p class="ais-pii-desc">Assessee profile (Part A) and tax transaction breakdown (Part B) extracted directly from Income Tax Department document.</p>
           </div>
-          <span class="ais-pii-badge">
-            <i data-lucide="check-circle" class="btn-icon-xs"></i>
-            Verified Tax Record
-          </span>
         </div>
+        <span class="ais-pii-badge">
+          <i data-lucide="check-circle" class="btn-icon-xs"></i>
+          Verified Tax Record
+        </span>
+      </div>
 
       <!-- PART A: General Information Web Component -->
       <ais-part-a tax-year="${escapeHtml(ais.tax_year || '2026-27')}"></ais-part-a>
-
 
       <!-- PART B1: TDS / TCS Transactions -->
       <div class="ais-part-section">
@@ -437,7 +470,6 @@ function renderAisDashboard(ais) {
       <!-- PART B3: Payment of Taxes Web Component -->
       <ais-tax-payment-card></ais-tax-payment-card>
 
-
       <!-- PART B4: Demand and Refund -->
       <div class="ais-part-section">
         <div class="ais-part-header">
@@ -462,10 +494,10 @@ function renderAisDashboard(ais) {
               <tbody>
                 ${partB4.map((ref) => `
                   <tr>
-                    <td>${escapeHtml(ref.financial_year || ref.assessment_year)}</td>
-                    <td>${escapeHtml(ref.nature_of_refund || ref.nature)}</td>
+                    <td>${escapeHtml(ref.financial_year || ref.assessment_year || '')}</td>
+                    <td>${escapeHtml(ref.nature_of_refund || ref.nature || '')}</td>
                     <td><strong>₹${Number(ref.refund_amount || ref.amount).toLocaleString('en-IN')}</strong></td>
-                    <td>${escapeHtml(ref.date_of_payment || ref.date_of_issuance)}</td>
+                    <td>${escapeHtml(ref.date_of_payment || ref.date_of_issuance || '')}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -485,10 +517,10 @@ function renderAisDashboard(ais) {
   container.innerHTML = html;
 
   // Set reactive properties on custom elements
-  const partAComp = container.querySelector('ais-part-a');
+  const partAComp = container.querySelector('ais-part-a') as AisPartA | null;
   if (partAComp) partAComp.data = partA;
 
-  const taxPayComp = container.querySelector('ais-tax-payment-card');
+  const taxPayComp = container.querySelector('ais-tax-payment-card') as AisTaxPaymentCard | null;
   if (taxPayComp) taxPayComp.payments = partB3;
 
   refreshIcons();
@@ -497,22 +529,24 @@ function renderAisDashboard(ais) {
 // --------------------------------------------------------------------------
 // PDF Canvas Page Navigation
 // --------------------------------------------------------------------------
-async function changePdfPage(delta) {
+async function changePdfPage(delta: number): Promise<void> {
   if (!state.pdfDoc) return;
   const newPage = state.currentPageNum + delta;
   if (newPage < 1 || newPage > state.totalPages) return;
 
   state.currentPageNum = newPage;
   const page = await state.pdfDoc.getPage(newPage);
-  const canvas = document.getElementById('pdfPageCanvas');
-  await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+  const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+  if (canvas) {
+    await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+  }
   updatePdfNavControls();
 }
 
-function updatePdfNavControls() {
+function updatePdfNavControls(): void {
   const indicator = document.getElementById('pdfPageIndicator');
-  const prevBtn = document.getElementById('prevPageBtn');
-  const nextBtn = document.getElementById('nextPageBtn');
+  const prevBtn = document.getElementById('prevPageBtn') as HTMLButtonElement | null;
+  const nextBtn = document.getElementById('nextPageBtn') as HTMLButtonElement | null;
 
   if (indicator) indicator.textContent = `Page ${state.currentPageNum} of ${state.totalPages}`;
   if (prevBtn) prevBtn.disabled = state.currentPageNum <= 1;
@@ -522,16 +556,17 @@ function updatePdfNavControls() {
 // ==========================================================================
 // Event Listeners Setup
 // ==========================================================================
-function setupEventListeners() {
+function setupEventListeners(): void {
   // 1. File Dropzone
   const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
+  const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
 
   if (dropZone && fileInput) {
     dropZone.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
+      const target = e.target as HTMLInputElement;
+      const file = target.files?.[0];
       if (file) {
         if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
           showToast('Please select a valid AIS PDF file.', 'error');
@@ -558,7 +593,8 @@ function setupEventListeners() {
     });
 
     dropZone.addEventListener('drop', (e) => {
-      const file = e.dataTransfer?.files?.[0];
+      const dragEvent = e as DragEvent;
+      const file = dragEvent.dataTransfer?.files?.[0];
       if (file) {
         if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
           showToast('Please drop a valid AIS PDF file.', 'error');
@@ -577,7 +613,7 @@ function setupEventListeners() {
   // 3. Workspace Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const tabId = btn.getAttribute('data-tab');
+      const tabId = btn.getAttribute('data-tab') || 'aisview';
       state.activeTab = tabId;
 
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -591,7 +627,8 @@ function setupEventListeners() {
 
   // 4. Header Action Buttons
   document.getElementById('reuploadBtn')?.addEventListener('click', () => {
-    document.getElementById('fileInput').click();
+    const input = document.getElementById('fileInput') as HTMLInputElement | null;
+    if (input) input.click();
   });
 
   document.getElementById('copyJsonBtn')?.addEventListener('click', () => {
@@ -653,26 +690,32 @@ function setupEventListeners() {
   document.getElementById('zoomInBtn')?.addEventListener('click', async () => {
     if (state.currentZoom < 2.0 && state.pdfDoc) {
       state.currentZoom += 0.25;
-      document.getElementById('zoomLevelText').textContent = `${Math.round(state.currentZoom * 100)}%`;
+      const zoomText = document.getElementById('zoomLevelText');
+      if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
       const page = await state.pdfDoc.getPage(state.currentPageNum);
-      const canvas = document.getElementById('pdfPageCanvas');
-      await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+      if (canvas) {
+        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      }
     }
   });
 
   document.getElementById('zoomOutBtn')?.addEventListener('click', async () => {
     if (state.currentZoom > 0.5 && state.pdfDoc) {
       state.currentZoom -= 0.25;
-      document.getElementById('zoomLevelText').textContent = `${Math.round(state.currentZoom * 100)}%`;
+      const zoomText = document.getElementById('zoomLevelText');
+      if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
       const page = await state.pdfDoc.getPage(state.currentPageNum);
-      const canvas = document.getElementById('pdfPageCanvas');
-      await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+      if (canvas) {
+        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+      }
     }
   });
 
   // 7. Password Modal Controls
   const submitPassword = () => {
-    const input = document.getElementById('aisPasswordInput');
+    const input = document.getElementById('aisPasswordInput') as HTMLInputElement | null;
     const val = input ? input.value.trim() : '';
     if (!val) {
       showToast('Please enter password (PAN + DOB)', 'error');
@@ -694,14 +737,14 @@ function setupEventListeners() {
   document.getElementById('btnCancelPasswordModal')?.addEventListener('click', () => closePasswordModal(true));
   document.getElementById('btnCancelPasswordClose')?.addEventListener('click', () => closePasswordModal(true));
   document.getElementById('btnTogglePasswordVisibility')?.addEventListener('click', () => {
-    const input = document.getElementById('aisPasswordInput');
+    const input = document.getElementById('aisPasswordInput') as HTMLInputElement | null;
     if (!input) return;
     const isPass = input.type === 'password';
     input.type = isPass ? 'text' : 'password';
   });
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: string | null | undefined): string {
   if (str === null || str === undefined) return '';
   return String(str)
     .replace(/&/g, '&amp;')

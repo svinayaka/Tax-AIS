@@ -1,26 +1,54 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import type { PdfParseProgress, PdfParseResult } from '../types/ais';
 
 // Set up PDF.js worker
-// pdfjs-dist v4+ uses modern ES modules
 try {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 } catch (err) {
   console.warn('Worker configuration note:', err);
 }
 
+export interface TextItem {
+  str: string;
+  dir: string;
+  width: number;
+  height: number;
+  transform: number[];
+  x: number;
+  y: number;
+  fontSize: number;
+  fontName?: string;
+  hasEOL?: boolean;
+}
+
+export interface TextLine {
+  y: number;
+  items: TextItem[];
+  minX: number;
+  maxX: number;
+  avgFontSize: number;
+  text?: string;
+}
+
 /**
  * Parse an uploaded PDF file into raw text, metadata, and page layouts.
- * @param {File|ArrayBuffer|Blob} file 
- * @param {Function} onProgress 
- * @returns {Promise<{text: string, pages: Array, metadata: Object}>}
  */
-export async function parsePdfDocument(file, onProgress = () => {}, password = null, onPasswordRequest = null) {
-  let arrayBuffer;
+export async function parsePdfDocument(
+  file: File | ArrayBuffer | Blob,
+  onProgress: (prog: PdfParseProgress) => void = () => {},
+  password: string | null = null,
+  onPasswordRequest: ((isRetry: boolean) => Promise<string | null>) | null = null
+): Promise<PdfParseResult> {
+  let arrayBuffer: ArrayBuffer;
   let fileName = 'document.pdf';
   let fileSize = 0;
 
-  if (file instanceof File || file instanceof Blob) {
+  if (file instanceof File) {
     fileName = file.name || 'document.pdf';
+    fileSize = file.size || 0;
+    arrayBuffer = await file.arrayBuffer();
+  } else if (file instanceof Blob) {
+    fileName = 'document.pdf';
     fileSize = file.size || 0;
     arrayBuffer = await file.arrayBuffer();
   } else if (file instanceof ArrayBuffer) {
@@ -32,7 +60,7 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
 
   onProgress({ stage: 'loading', percent: 15, message: 'Loading PDF binary stream...' });
 
-  const docInitParams = {
+  const docInitParams: any = {
     data: arrayBuffer,
     cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`,
     cMapPacked: true,
@@ -46,7 +74,7 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
   const loadingTask = pdfjsLib.getDocument(docInitParams);
 
   if (onPasswordRequest) {
-    loadingTask.onPassword = async (callback, reason) => {
+    loadingTask.onPassword = async (callback: (pwdOrErr: string | Error) => void, reason: number) => {
       try {
         const isRetry = reason === 2;
         const pass = await onPasswordRequest(isRetry);
@@ -55,16 +83,16 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
         } else {
           callback(new Error('Password cancelled by user'));
         }
-      } catch (err) {
-        callback(err);
+      } catch (err: any) {
+        callback(err instanceof Error ? err : new Error(String(err)));
       }
     };
   }
 
   const pdf = await loadingTask.promise;
   const numPages = pdf.numPages;
-  const pagesData = [];
-  const fullTextParts = [];
+  const pagesData: any[] = [];
+  const fullTextParts: string[] = [];
 
   onProgress({ stage: 'parsing', percent: 35, message: `Extracting ${numPages} page(s)...` });
 
@@ -74,7 +102,7 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
     const textContent = await page.getTextContent();
     
     // Sort text items by vertical position (top to bottom), then horizontal (left to right)
-    const items = textContent.items.map(item => {
+    const items: TextItem[] = (textContent.items as any[]).map(item => {
       const transform = item.transform;
       // transform[4] is x, transform[5] is y in PDF coordinate space (y starts at bottom)
       const x = transform[4];
@@ -97,7 +125,7 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
 
     // Reconstruct lines preserving layout
     const lines = groupItemsIntoLines(items);
-    const pageText = lines.map(line => line.text).join('\n');
+    const pageText = lines.map(line => line.text || '').join('\n');
 
     fullTextParts.push(`--- Page ${pageNum} ---\n` + pageText);
     pagesData.push({
@@ -116,9 +144,9 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
   }
 
   // Extract document metadata
-  let docMetadata = {};
+  let docMetadata: Record<string, any> = {};
   try {
-    const meta = await pdf.getMetadata();
+    const meta: any = await pdf.getMetadata();
     docMetadata = {
       title: meta?.info?.Title || fileName,
       author: meta?.info?.Author || 'Unknown',
@@ -148,7 +176,7 @@ export async function parsePdfDocument(file, onProgress = () => {}, password = n
 /**
  * Groups raw PDF text items into coherent horizontal lines
  */
-function groupItemsIntoLines(items) {
+function groupItemsIntoLines(items: TextItem[]): TextLine[] {
   if (!items || items.length === 0) return [];
 
   // Sort by Y coordinate primarily (with 4px line tolerance)
@@ -160,8 +188,8 @@ function groupItemsIntoLines(items) {
     return a.x - b.x;
   });
 
-  const lines = [];
-  let currentLine = {
+  const lines: TextLine[] = [];
+  let currentLine: TextLine = {
     y: sorted[0].y,
     items: [sorted[0]],
     minX: sorted[0].x,
@@ -199,7 +227,7 @@ function groupItemsIntoLines(items) {
   return lines;
 }
 
-function assembleLineText(items) {
+function assembleLineText(items: TextItem[]): string {
   let text = '';
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
@@ -218,10 +246,11 @@ function assembleLineText(items) {
 /**
  * Render a specific page to an HTML Canvas element
  */
-export async function renderPageToCanvas(pageObject, canvas, scale = 1.3) {
+export async function renderPageToCanvas(pageObject: any, canvas: HTMLCanvasElement, scale = 1.3): Promise<any> {
   if (!pageObject || !canvas) return;
   const viewport = pageObject.getViewport({ scale });
   const context = canvas.getContext('2d');
+  if (!context) return;
   
   canvas.height = viewport.height;
   canvas.width = viewport.width;

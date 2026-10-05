@@ -1,9 +1,13 @@
+import { StructuredExtractionResult } from '../types/ais';
+
 /**
  * Exporter utility for transforming structured extraction results into multiple formats
  */
 
-export function exportToJson(structuredData, pretty = true) {
-  if (structuredData?.aisJson) {
+export function exportToJson(structuredData: StructuredExtractionResult | null, pretty: boolean = true): string {
+  if (!structuredData) return '{}';
+
+  if (structuredData.aisJson) {
     return pretty ? JSON.stringify(structuredData.aisJson, null, 2) : JSON.stringify(structuredData.aisJson);
   }
 
@@ -33,8 +37,10 @@ export function exportToJson(structuredData, pretty = true) {
   return pretty ? JSON.stringify(cleanData, null, 2) : JSON.stringify(cleanData);
 }
 
-export function exportToCsv(structuredData) {
-  const parts = [];
+export function exportToCsv(structuredData: StructuredExtractionResult | null): string {
+  if (!structuredData) return '';
+
+  const parts: string[] = [];
 
   // 1. Key-Value Pairs
   parts.push('# KEY-VALUE PAIRS');
@@ -74,7 +80,9 @@ export function exportToCsv(structuredData) {
   return parts.join('\n');
 }
 
-export function exportToMarkdown(structuredData) {
+export function exportToMarkdown(structuredData: StructuredExtractionResult | null): string {
+  if (!structuredData) return '';
+
   let md = `# Structured Data Extraction Report\n\n`;
   md += `**Document Type:** ${structuredData.documentClassification.label}\n`;
   md += `**Extracted On:** ${new Date().toLocaleString()}\n`;
@@ -126,7 +134,7 @@ export function exportToMarkdown(structuredData) {
   return md;
 }
 
-function escapeCsv(val) {
+function escapeCsv(val: any): string {
   if (val === null || val === undefined) return '';
   return String(val).replace(/"/g, '""');
 }
@@ -134,7 +142,7 @@ function escapeCsv(val) {
 /**
  * Trigger file download in browser
  */
-export function downloadFile(content, fileName, mimeType) {
+export function downloadFile(content: string, fileName: string, mimeType: string): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
