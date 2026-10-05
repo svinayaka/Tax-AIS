@@ -1,0 +1,236 @@
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Set up PDF.js worker
+// pdfjs-dist v4+ uses modern ES modules
+try {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+} catch (err) {
+  console.warn('Worker configuration note:', err);
+}
+
+/**
+ * Parse an uploaded PDF file into raw text, metadata, and page layouts.
+ * @param {File|ArrayBuffer|Blob} file 
+ * @param {Function} onProgress 
+ * @returns {Promise<{text: string, pages: Array, metadata: Object}>}
+ */
+export async function parsePdfDocument(file, onProgress = () => {}, password = null, onPasswordRequest = null) {
+  let arrayBuffer;
+  let fileName = 'document.pdf';
+  let fileSize = 0;
+
+  if (file instanceof File || file instanceof Blob) {
+    fileName = file.name || 'document.pdf';
+    fileSize = file.size || 0;
+    arrayBuffer = await file.arrayBuffer();
+  } else if (file instanceof ArrayBuffer) {
+    arrayBuffer = file;
+    fileSize = file.byteLength;
+  } else {
+    throw new Error('Unsupported file input type');
+  }
+
+  onProgress({ stage: 'loading', percent: 15, message: 'Loading PDF binary stream...' });
+
+  const docInitParams = {
+    data: arrayBuffer,
+    cMapUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/standard_fonts/`,
+  };
+
+  if (password) {
+    docInitParams.password = password;
+  }
+
+  const loadingTask = pdfjsLib.getDocument(docInitParams);
+
+  if (onPasswordRequest) {
+    loadingTask.onPassword = async (callback, reason) => {
+      try {
+        const isRetry = reason === 2;
+        const pass = await onPasswordRequest(isRetry);
+        if (pass) {
+          callback(pass);
+        } else {
+          callback(new Error('Password cancelled by user'));
+        }
+      } catch (err) {
+        callback(err);
+      }
+    };
+  }
+
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+  const pagesData = [];
+  const fullTextParts = [];
+
+  onProgress({ stage: 'parsing', percent: 35, message: `Extracting ${numPages} page(s)...` });
+
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const textContent = await page.getTextContent();
+    
+    // Sort text items by vertical position (top to bottom), then horizontal (left to right)
+    const items = textContent.items.map(item => {
+      const transform = item.transform;
+      // transform[4] is x, transform[5] is y in PDF coordinate space (y starts at bottom)
+      const x = transform[4];
+      const y = viewport.height - transform[5]; // Flip Y for standard DOM top-left origin
+      const width = item.width * (viewport.scale / (viewport.scale || 1));
+      const height = item.height || Math.abs(transform[0]) || 12;
+      return {
+        str: item.str,
+        dir: item.dir,
+        width,
+        height,
+        transform,
+        x,
+        y,
+        fontSize: Math.abs(transform[0]) || 12,
+        fontName: item.fontName,
+        hasEOL: item.hasEOL
+      };
+    });
+
+    // Reconstruct lines preserving layout
+    const lines = groupItemsIntoLines(items);
+    const pageText = lines.map(line => line.text).join('\n');
+
+    fullTextParts.push(`--- Page ${pageNum} ---\n` + pageText);
+    pagesData.push({
+      pageNumber: pageNum,
+      width: viewport.width,
+      height: viewport.height,
+      items,
+      lines,
+      text: pageText,
+      pageObject: page,
+      viewport
+    });
+
+    const progressPct = 35 + Math.round((pageNum / numPages) * 45);
+    onProgress({ stage: 'extracting', percent: progressPct, message: `Processed page ${pageNum} of ${numPages}...` });
+  }
+
+  // Extract document metadata
+  let docMetadata = {};
+  try {
+    const meta = await pdf.getMetadata();
+    docMetadata = {
+      title: meta?.info?.Title || fileName,
+      author: meta?.info?.Author || 'Unknown',
+      creator: meta?.info?.Creator || 'Unknown',
+      producer: meta?.info?.Producer || 'Unknown',
+      creationDate: meta?.info?.CreationDate || null,
+      modificationDate: meta?.info?.ModDate || null,
+      pdfVersion: meta?.info?.PDFFormatVersion || '1.7',
+    };
+  } catch (e) {
+    console.warn('Metadata extraction skipped:', e);
+  }
+
+  onProgress({ stage: 'finishing', percent: 95, message: 'Structuring extracted tokens...' });
+
+  return {
+    fileName,
+    fileSize,
+    pageCount: numPages,
+    rawText: fullTextParts.join('\n\n'),
+    pages: pagesData,
+    metadata: docMetadata,
+    pdfDoc: pdf
+  };
+}
+
+/**
+ * Groups raw PDF text items into coherent horizontal lines
+ */
+function groupItemsIntoLines(items) {
+  if (!items || items.length === 0) return [];
+
+  // Sort by Y coordinate primarily (with 4px line tolerance)
+  const sorted = [...items].sort((a, b) => {
+    const yDiff = a.y - b.y;
+    if (Math.abs(yDiff) > 4) {
+      return yDiff;
+    }
+    return a.x - b.x;
+  });
+
+  const lines = [];
+  let currentLine = {
+    y: sorted[0].y,
+    items: [sorted[0]],
+    minX: sorted[0].x,
+    maxX: sorted[0].x + sorted[0].width,
+    avgFontSize: sorted[0].fontSize
+  };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const item = sorted[i];
+    if (Math.abs(item.y - currentLine.y) <= 5) {
+      currentLine.items.push(item);
+      currentLine.maxX = Math.max(currentLine.maxX, item.x + item.width);
+      currentLine.y = (currentLine.y * (currentLine.items.length - 1) + item.y) / currentLine.items.length;
+    } else {
+      currentLine.items.sort((a, b) => a.x - b.x);
+      currentLine.text = assembleLineText(currentLine.items);
+      lines.push(currentLine);
+
+      currentLine = {
+        y: item.y,
+        items: [item],
+        minX: item.x,
+        maxX: item.x + item.width,
+        avgFontSize: item.fontSize
+      };
+    }
+  }
+
+  if (currentLine.items.length > 0) {
+    currentLine.items.sort((a, b) => a.x - b.x);
+    currentLine.text = assembleLineText(currentLine.items);
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function assembleLineText(items) {
+  let text = '';
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (i > 0) {
+      const prev = items[i - 1];
+      const gap = item.x - (prev.x + prev.width);
+      if (gap > 4) {
+        text += ' ';
+      }
+    }
+    text += item.str;
+  }
+  return text.trim();
+}
+
+/**
+ * Render a specific page to an HTML Canvas element
+ */
+export async function renderPageToCanvas(pageObject, canvas, scale = 1.3) {
+  if (!pageObject || !canvas) return;
+  const viewport = pageObject.getViewport({ scale });
+  const context = canvas.getContext('2d');
+  
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+
+  const renderContext = {
+    canvasContext: context,
+    viewport: viewport
+  };
+
+  await pageObject.render(renderContext).promise;
+  return viewport;
+}

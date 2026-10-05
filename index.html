@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-ksv-ds-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AIS Data Extraction Engine | Annual Information Statement (Form 168)</title>
+  <meta name="description" content="Data-blind extraction engine for Indian Annual Information Statement (AIS / Form 168). Extracts Part A and Part B with mandatory PII sanitization." />
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app" class="app-wrapper">
+    
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand-group">
+          <div class="brand-icon-wrapper">
+            <i data-lucide="shield-check" class="brand-icon"></i>
+          </div>
+          <div class="brand-text">
+            <h1 class="brand-title">DocuMorph <span class="brand-gradient">AIS</span></h1>
+            <span class="brand-tagline">Annual Information Statement (Form 168) Extraction Engine</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="engine-badge">
+            <span class="pulse-dot"></span>
+            <span>Form 168 / AIS Engine</span>
+          </div>
+
+          <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
+            <i data-lucide="sun" class="sun-icon"></i>
+            <i data-lucide="moon" class="moon-icon"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="main-container">
+
+      <!-- Hero & Uploader Section -->
+      <section class="hero-section">
+        <div class="hero-badge">
+          <i data-lucide="zap" class="hero-badge-icon"></i>
+          <span>Indian Income Tax Department &bull; AIS & Form 26AS Extraction</span>
+        </div>
+        <h2 class="hero-heading">
+          Extract <span class="text-gradient">Part A & Part B</span> from AIS PDF
+        </h2>
+        <p class="hero-subheading">
+          Upload your Annual Information Statement (AIS / Form 168) PDF. Automatically extracts general information (Part A) with mandatory PII redaction and transactions (Part B: TDS/TCS, SFT, Tax Payments, Demand/Refund) into clean structured JSON.
+        </p>
+
+        <!-- Dropzone Card -->
+        <div id="dropZone" class="dropzone-card">
+          <input type="file" id="fileInput" accept=".pdf" class="file-input-hidden" />
+          
+          <div class="dropzone-content">
+            <div class="upload-icon-pulse">
+              <i data-lucide="file-up" class="upload-icon"></i>
+            </div>
+            
+            <h3 class="dropzone-title">Drop your AIS PDF file here, or <span class="browse-link">browse files</span></h3>
+            <p class="dropzone-hint">Upload official unlocked Annual Information Statement (AIS) PDF. 100% Client-side and PII-redacted.</p>
+            
+            <div class="upload-features">
+              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part A: Assessee Profile (Sanitized)</span>
+              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part B1: TDS / TCS Line Items</span>
+              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part B3: Tax Payments (Challans)</span>
+              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Strict JSON Schema Output</span>
+            </div>
+          </div>
+
+          <!-- Upload / Processing Progress Overlay -->
+          <div id="uploadProgressOverlay" class="progress-overlay hidden">
+            <div class="spinner-ring"></div>
+            <h4 id="progressStatusTitle" class="progress-title">Parsing AIS Document...</h4>
+            <div class="progress-bar-track">
+              <div id="progressBarFill" class="progress-bar-fill" style="width: 10%;"></div>
+            </div>
+            <p id="progressStatusDetail" class="progress-detail">Reading PDF binary stream...</p>
+          </div>
+        </div>
+
+        <!-- 1-Click Reference File Button -->
+        <div class="samples-bar">
+          <button id="loadReferenceAisBtn" class="btn btn-secondary">
+            <i data-lucide="file-text" class="btn-icon-sm" style="color:var(--ksv-ds-text-brand);"></i>
+            <span>Load Reference AIS File (Tax Year 2026-27)</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Extraction Results Workspace (Hidden initially, revealed on load) -->
+      <section id="resultsWorkspace" class="results-workspace hidden">
+        
+        <!-- Document Meta Header Banner -->
+        <div class="document-banner">
+          <div class="doc-header-info">
+            <div class="doc-badge-cluster">
+              <span class="doc-type-badge">
+                <i data-lucide="file-text" class="badge-icon"></i>
+                <span>Annual Information Statement (AIS - Form 168)</span>
+              </span>
+              <span class="confidence-badge">
+                <i data-lucide="shield-check" class="badge-icon"></i>
+                <span id="confidenceText">Verified Assessee Record</span>
+              </span>
+              <span class="meta-pill">
+                <i data-lucide="calendar" class="badge-icon"></i>
+                <span id="taxYearBannerBadge">Tax Year 2026-27</span>
+              </span>
+            </div>
+            <h2 id="docTitleHeading" class="doc-title-heading">Annual Information Statement (AIS - Form 168)</h2>
+            <p id="docSummaryText" class="doc-summary-text">Extracted Part A General Profile and Part B Transactions with automated compliance scrubbing.</p>
+          </div>
+
+          <div class="doc-header-actions">
+            <button id="reuploadBtn" class="btn btn-secondary btn-sm" title="Upload another document">
+              <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
+              <span>Upload New AIS</span>
+            </button>
+            <button id="copyJsonBtn" class="btn btn-secondary btn-sm" title="Copy structured JSON">
+              <i data-lucide="copy" class="btn-icon-sm"></i>
+              <span>Copy JSON</span>
+            </button>
+            <div class="export-dropdown-wrapper">
+              <button id="exportDropdownBtn" class="btn btn-primary btn-sm">
+                <i data-lucide="download" class="btn-icon-sm"></i>
+                <span>Export Data</span>
+                <i data-lucide="chevron-down" class="btn-icon-sm"></i>
+              </button>
+              <div id="exportMenu" class="export-menu hidden">
+                <button class="export-item" data-export="json">
+                  <i data-lucide="file-code" class="export-item-icon"></i>
+                  <span>Export as JSON (.json)</span>
+                </button>
+                <button class="export-item" data-export="csv">
+                  <i data-lucide="table" class="export-item-icon"></i>
+                  <span>Export as CSV (.csv)</span>
+                </button>
+                <button class="export-item" data-export="markdown">
+                  <i data-lucide="file-text" class="export-item-icon"></i>
+                  <span>Export as Markdown (.md)</span>
+                </button>
+                <button class="export-item" data-export="print">
+                  <i data-lucide="printer" class="export-item-icon"></i>
+                  <span>Print / Save PDF Report</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI Metrics Grid -->
+        <div class="kpi-metrics-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap kpi-blue">
+              <i data-lucide="receipt" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-content">
+              <span class="kpi-label">TDS Sources (Part B1)</span>
+              <h3 id="kpiTdsCount" class="kpi-value">2</h3>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap kpi-emerald">
+              <i data-lucide="dollar-sign" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-content">
+              <span class="kpi-label">Total Credited</span>
+              <h3 id="kpiTotalCredited" class="kpi-value">₹811</h3>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap kpi-purple">
+              <i data-lucide="landmark" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-content">
+              <span class="kpi-label">Tax Paid (Part B3)</span>
+              <h3 id="kpiTaxPaid" class="kpi-value">₹2,003</h3>
+            </div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-icon-wrap kpi-amber">
+              <i data-lucide="shield" class="kpi-icon"></i>
+            </div>
+            <div class="kpi-content">
+              <span class="kpi-label">PII Redaction</span>
+              <h3 class="kpi-value" style="font-size:1.15rem; color:var(--ksv-ds-status-success-icon);">100% Blind</h3>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Workspace Tabs -->
+        <div class="workspace-tabs-container">
+          <div class="tabs-nav" role="tablist">
+            <button class="tab-btn active" data-tab="aisview" role="tab">
+              <i data-lucide="layout-dashboard" class="tab-icon"></i>
+              <span>Part A & Part B Structured Dashboard</span>
+            </button>
+            <button class="tab-btn" data-tab="jsonview" role="tab">
+              <i data-lucide="code-2" class="tab-icon"></i>
+              <span>Structured JSON (Developer Schema)</span>
+            </button>
+            <button class="tab-btn" data-tab="pdfview" role="tab" id="pdfViewTabBtn">
+              <i data-lucide="file-search" class="tab-icon"></i>
+              <span>AIS PDF Document</span>
+            </button>
+          </div>
+
+          <!-- Tab Content Panes -->
+          <div class="tab-panes-wrapper">
+
+            <!-- TAB 1: AIS Dashboard View -->
+            <div id="pane-aisview" class="tab-pane active">
+              <div id="aisDashboardContainer">
+                <!-- Dynamically rendered AIS Part A, Part B1, Part B2, Part B3, Part B4 -->
+              </div>
+            </div>
+
+            <!-- TAB 2: JSON Schema View -->
+            <div id="pane-jsonview" class="tab-pane">
+              <div class="json-schema-card">
+                <div class="json-toolbar">
+                  <div class="json-title-group">
+                    <i data-lucide="braces" class="json-icon"></i>
+                    <span>Clean Structured JSON matching Strict Schema Contract</span>
+                  </div>
+                  <div class="json-actions">
+                    <button id="copyJsonTabBtn" class="btn btn-secondary btn-xs">
+                      <i data-lucide="copy" class="btn-icon-xs"></i>
+                      <span>Copy JSON</span>
+                    </button>
+                    <button id="downloadJsonTabBtn" class="btn btn-primary btn-xs">
+                      <i data-lucide="download" class="btn-icon-xs"></i>
+                      <span>Download .json</span>
+                    </button>
+                  </div>
+                </div>
+                <pre id="fullJsonDisplay" class="code-box full-json-code"></pre>
+              </div>
+            </div>
+
+            <!-- TAB 3: PDF Viewer Canvas -->
+            <div id="pane-pdfview" class="tab-pane">
+              <div class="pdf-viewer-card">
+                <div class="pdf-viewer-toolbar">
+                  <div class="pdf-nav-controls">
+                    <button id="prevPageBtn" class="btn btn-secondary btn-xs" disabled>
+                      <i data-lucide="chevron-left" class="btn-icon-xs"></i>
+                      <span>Prev</span>
+                    </button>
+                    <span id="pdfPageIndicator" class="page-indicator">Page 1 of 1</span>
+                    <button id="nextPageBtn" class="btn btn-secondary btn-xs" disabled>
+                      <span>Next</span>
+                      <i data-lucide="chevron-right" class="btn-icon-xs"></i>
+                    </button>
+                  </div>
+
+                  <div class="pdf-zoom-controls">
+                    <button id="zoomOutBtn" class="btn btn-icon btn-xs" title="Zoom Out">
+                      <i data-lucide="zoom-out" class="btn-icon-xs"></i>
+                    </button>
+                    <span id="zoomLevelText" class="zoom-text">100%</span>
+                    <button id="zoomInBtn" class="btn btn-icon btn-xs" title="Zoom In">
+                      <i data-lucide="zoom-in" class="btn-icon-xs"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="pdf-canvas-container" id="pdfCanvasContainer">
+                  <canvas id="pdfPageCanvas" class="pdf-canvas"></canvas>
+                  <div id="pdfNoPreviewMessage" class="no-pdf-placeholder hidden">
+                    <i data-lucide="file-question" class="placeholder-icon"></i>
+                    <p>Sample text loaded. Upload an AIS PDF file or click Load Reference File to view interactive rendering.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+    <!-- Password Modal for Protected AIS PDFs -->
+    <div id="passwordModalBackdrop" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="flex items-center gap-2">
+            <i data-lucide="lock" class="text-brand w-5 h-5"></i>
+            <h3 class="modal-title">Enter AIS PDF Password</h3>
+          </div>
+          <button id="btnCancelPasswordClose" class="btn-modal-close" title="Close" aria-label="Close">
+            <i data-lucide="x" class="close-icon"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="p-3 bg-subtle rounded-md border border-subtle text-xs text-secondary leading-relaxed">
+            <p class="mb-1 font-semibold text-primary"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-brand"></i> Standard AIS Password Format:</p>
+            <p><strong>PAN (in UPPERCASE) + Date of Birth (DDMMYYYY)</strong></p>
+            <p class="text-tertiary mt-1">Example: For PAN <code class="px-1 py-0.5 rounded bg-surface">ABCDE1234F</code> born on 01-Jan-1990 &rarr; <code class="px-1 py-0.5 rounded bg-surface font-mono">ABCDE1234F01011990</code></p>
+          </div>
+
+          <form id="passwordForm" class="form-group" onsubmit="return false;">
+            <label for="aisPasswordInput" class="form-label">Document Password</label>
+            <div class="flex gap-2">
+              <input type="password" id="aisPasswordInput" class="form-input flex-1 font-mono" placeholder="PAN+DDMMYYYY" autocomplete="current-password" autofocus />
+              <button type="button" id="btnTogglePasswordVisibility" class="btn btn-secondary btn-icon" title="Show/Hide Password" aria-label="Show or hide password">
+                <i data-lucide="eye" id="passwordEyeIcon" class="btn-icon-sm"></i>
+              </button>
+            </div>
+            <span id="passwordErrorMsg" class="text-xs text-danger hidden mt-1">Incorrect password. Please verify your PAN and Date of Birth.</span>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnCancelPasswordModal" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="btnSubmitPassword" class="btn btn-primary">
+            <i data-lucide="unlock" class="btn-icon-sm"></i>
+            <span>Unlock & Extract</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Toast Notifications -->
+    <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-container">
+        <p class="footer-text">DocuMorph AIS &copy; 2026. Data-blind Indian Tax Extraction Engine with deterministic PII sanitization.</p>
+        <div class="footer-links">
+          <span>Zero Server Uploads</span>
+          <span>&bull;</span>
+          <span>100% Private In-Browser</span>
+          <span>&bull;</span>
+          <span>Form 168 / 26AS Compliant</span>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
