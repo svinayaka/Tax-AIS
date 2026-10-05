@@ -59,6 +59,9 @@
 Tax-AIS/
 ├── .husky/                   # Git hooks (pre-commit quality gates)
 ├── public/                   # Static assets & sample files
+│   ├── _redirects            # Netlify SPA routing fallback
+│   ├── favicon.svg           # Application favicon
+│   └── icons.svg             # SVG icon sprites
 ├── src/
 │   ├── components/           # Stencil / Custom Element UI components
 │   │   ├── ais-deductor-card.ts    # TDS/TCS deductor entity & quarterly line items
@@ -80,6 +83,7 @@ Tax-AIS/
 ├── AGENTS.md                 # Developer & AI Agent contribution guidelines
 ├── ARCHITECTURE.md           # System architecture documentation
 ├── index.html                # Single-page application shell
+├── netlify.toml              # Netlify build, SPA routing & security headers config
 ├── package.json              # Project dependencies, scripts, and quality gates
 ├── sonar-project.properties  # SonarQube / SonarCloud configuration
 └── tsconfig.json             # Strict TypeScript compiler configuration
@@ -205,6 +209,18 @@ The user interface adheres to token-based design principles provided by `@svinay
 
 ---
 
-## 6. Code Governance & Development Standards
+## 6. Deployment & Static Hosting Architecture (Netlify)
+
+Tax-AIS is distributed as a zero-dependency, static Single Page Application (SPA):
+
+- **Build Pipeline**: Executed via `npm run build` (`tsc && vite build`), generating optimized bundles inside the `dist/` directory.
+- **Publish Directory**: Netlify serves directly from `dist/` as defined in [`netlify.toml`](file:///Users/siddhivinayaka/Documents/Learning/ais/netlify.toml).
+- **SPA Fallback Routing**: All wildcard route traffic (`/*`) rewrites to `/index.html` via `[[redirects]]` and `public/_redirects`.
+- **Security & Caching**: Custom HTTP response headers enforce frame sandboxing (`X-Frame-Options: DENY`), MIME sniffing protection (`X-Content-Type-Options: nosniff`), and 1-year immutable caching for `/assets/*`.
+
+---
+
+## 7. Code Governance & Development Standards
 
 For developer workflows, AI agent contribution guidelines, SonarQube rule specifications, and pre-commit hook configurations, refer to **[`AGENTS.md`](file:///Users/siddhivinayaka/Documents/Learning/ais/AGENTS.md)**.
+
