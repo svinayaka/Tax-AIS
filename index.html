@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AIS Data Extraction Engine | Annual Information Statement (Form 168)</title>
-  <meta name="description" content="Data-blind extraction engine for Indian Annual Information Statement (AIS / Form 168). Extracts Part A and Part B with mandatory PII sanitization." />
+  <title>AIS - Annual Information Statement (Form 168) Extraction Engine</title>
+  <meta name="description" content="Privacy-first in-browser extraction engine for Indian Annual Information Statement (AIS / Form 168) and Form 26AS. Supports PDF, TXT, CSV, and JSON." />
   
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,15 +24,15 @@
             <i data-lucide="shield-check" class="brand-icon"></i>
           </div>
           <div class="brand-text">
-            <h1 class="brand-title">DocuMorph <span class="brand-gradient">AIS</span></h1>
-            <span class="brand-tagline">Annual Information Statement (Form 168) Extraction Engine</span>
+            <h1 class="brand-title">AIS <span class="brand-subtext">Tax Engine</span></h1>
+            <span class="brand-tagline">Annual Information Statement (Form 168 / 26AS)</span>
           </div>
         </div>
 
         <div class="header-actions">
           <div class="engine-badge">
             <span class="pulse-dot"></span>
-            <span>Form 168 / AIS Engine</span>
+            <span>100% In-Browser Privacy</span>
           </div>
 
           <button id="themeToggleBtn" class="btn btn-icon" title="Toggle Theme" aria-label="Toggle Theme">
@@ -46,36 +46,36 @@
     <!-- Main Content Container -->
     <main class="main-container">
 
-      <!-- Hero & Uploader Section -->
-      <section class="hero-section">
+      <!-- Upload Section (Visible on fresh state) -->
+      <section id="uploadSection" class="hero-section">
         <div class="hero-badge">
-          <i data-lucide="zap" class="hero-badge-icon"></i>
-          <span>Indian Income Tax Department &bull; AIS & Form 26AS Extraction</span>
+          <i data-lucide="file-check" class="hero-badge-icon"></i>
+          <span>Income Tax Department &bull; AIS & Form 26AS Extraction</span>
         </div>
         <h2 class="hero-heading">
-          Extract <span class="text-gradient">Part A & Part B</span> from AIS PDF
+          Extract <span class="text-gradient">Part A & Part B</span> from AIS
         </h2>
         <p class="hero-subheading">
-          Upload your Annual Information Statement (AIS / Form 168) PDF. Automatically extracts general information (Part A) with mandatory PII redaction and transactions (Part B: TDS/TCS, SFT, Tax Payments, Demand/Refund) into clean structured JSON.
+          Upload your Annual Information Statement (AIS / Form 168) in <strong>PDF, TXT, CSV, or JSON</strong> format. Automatically extracts assessee profile, TDS/TCS records, and tax payment challans.
         </p>
 
         <!-- Dropzone Card -->
         <div id="dropZone" class="dropzone-card">
-          <input type="file" id="fileInput" accept=".pdf" class="file-input-hidden" />
+          <input type="file" id="fileInput" accept=".pdf,.txt,.csv,.json" class="file-input-hidden" />
           
           <div class="dropzone-content">
             <div class="upload-icon-pulse">
               <i data-lucide="file-up" class="upload-icon"></i>
             </div>
             
-            <h3 class="dropzone-title">Drop your AIS PDF file here, or <span class="browse-link">browse files</span></h3>
-            <p class="dropzone-hint">Upload official unlocked Annual Information Statement (AIS) PDF. 100% Client-side and PII-redacted.</p>
+            <h3 class="dropzone-title">Drop your AIS file here, or <span class="browse-link">browse files</span></h3>
+            <p class="dropzone-hint">Supports <strong>PDF, TXT, CSV, and JSON</strong> files. Zero server uploads &bull; 100% Client-side.</p>
             
-            <div class="upload-features">
-              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part A: Assessee Profile (Sanitized)</span>
-              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part B1: TDS / TCS Line Items</span>
-              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Part B3: Tax Payments (Challans)</span>
-              <span class="feat-pill"><i data-lucide="check-circle" class="feat-icon"></i> Strict JSON Schema Output</span>
+            <div class="upload-format-badges">
+              <span class="format-pill"><i data-lucide="file-text" class="format-icon"></i> PDF (Form 168)</span>
+              <span class="format-pill"><i data-lucide="align-left" class="format-icon"></i> Text Layout (.txt)</span>
+              <span class="format-pill"><i data-lucide="table" class="format-icon"></i> CSV Records (.csv)</span>
+              <span class="format-pill"><i data-lucide="code" class="format-icon"></i> JSON Schema (.json)</span>
             </div>
           </div>
 
@@ -86,20 +86,20 @@
             <div class="progress-bar-track">
               <div id="progressBarFill" class="progress-bar-fill" style="width: 10%;"></div>
             </div>
-            <p id="progressStatusDetail" class="progress-detail">Reading PDF binary stream...</p>
+            <p id="progressStatusDetail" class="progress-detail">Reading document stream...</p>
           </div>
         </div>
 
-        <!-- 1-Click Reference File Button -->
+        <!-- Discreet Sample Reference Link -->
         <div class="samples-bar">
-          <button id="loadReferenceAisBtn" class="btn btn-secondary">
-            <i data-lucide="file-text" class="btn-icon-sm" style="color:var(--ksv-ds-text-brand);"></i>
-            <span>Load Reference AIS File (Tax Year 2026-27)</span>
+          <button id="loadReferenceAisBtn" class="btn btn-ghost btn-sm">
+            <i data-lucide="sparkles" class="btn-icon-xs text-brand"></i>
+            <span>Or test with sample AIS reference data (Tax Year 2026-27)</span>
           </button>
         </div>
       </section>
 
-      <!-- Extraction Results Workspace (Hidden initially, revealed on load) -->
+      <!-- Extraction Results Workspace (Hidden on fresh state, revealed after upload) -->
       <section id="resultsWorkspace" class="results-workspace hidden">
         
         <!-- Document Meta Header Banner -->
@@ -108,55 +108,26 @@
             <div class="doc-badge-cluster">
               <span class="doc-type-badge">
                 <i data-lucide="file-text" class="badge-icon"></i>
-                <span>Annual Information Statement (AIS - Form 168)</span>
+                <span id="docFormatBadge">AIS (Form 168)</span>
               </span>
               <span class="confidence-badge">
                 <i data-lucide="shield-check" class="badge-icon"></i>
-                <span id="confidenceText">Verified Assessee Record</span>
+                <span id="confidenceText">Verified Tax Record</span>
               </span>
               <span class="meta-pill">
                 <i data-lucide="calendar" class="badge-icon"></i>
                 <span id="taxYearBannerBadge">Tax Year 2026-27</span>
               </span>
             </div>
-            <h2 id="docTitleHeading" class="doc-title-heading">Annual Information Statement (AIS - Form 168)</h2>
-            <p id="docSummaryText" class="doc-summary-text">Extracted Part A General Profile and Part B Transactions with automated compliance scrubbing.</p>
+            <h2 id="docTitleHeading" class="doc-title-heading">Annual Information Statement (AIS)</h2>
+            <p id="docSummaryText" class="doc-summary-text">Assessee Profile and Tax Transactions extracted cleanly.</p>
           </div>
 
           <div class="doc-header-actions">
             <button id="reuploadBtn" class="btn btn-secondary btn-sm" title="Upload another document">
-              <i data-lucide="refresh-cw" class="btn-icon-sm"></i>
-              <span>Upload New AIS</span>
+              <i data-lucide="arrow-left" class="btn-icon-sm"></i>
+              <span>Upload Another File</span>
             </button>
-            <button id="copyJsonBtn" class="btn btn-secondary btn-sm" title="Copy structured JSON">
-              <i data-lucide="copy" class="btn-icon-sm"></i>
-              <span>Copy JSON</span>
-            </button>
-            <div class="export-dropdown-wrapper">
-              <button id="exportDropdownBtn" class="btn btn-primary btn-sm">
-                <i data-lucide="download" class="btn-icon-sm"></i>
-                <span>Export Data</span>
-                <i data-lucide="chevron-down" class="btn-icon-sm"></i>
-              </button>
-              <div id="exportMenu" class="export-menu hidden">
-                <button class="export-item" data-export="json">
-                  <i data-lucide="file-code" class="export-item-icon"></i>
-                  <span>Export as JSON (.json)</span>
-                </button>
-                <button class="export-item" data-export="csv">
-                  <i data-lucide="table" class="export-item-icon"></i>
-                  <span>Export as CSV (.csv)</span>
-                </button>
-                <button class="export-item" data-export="markdown">
-                  <i data-lucide="file-text" class="export-item-icon"></i>
-                  <span>Export as Markdown (.md)</span>
-                </button>
-                <button class="export-item" data-export="print">
-                  <i data-lucide="printer" class="export-item-icon"></i>
-                  <span>Print / Save PDF Report</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -168,37 +139,37 @@
             </div>
             <div class="kpi-content">
               <span class="kpi-label">TDS Sources (Part B1)</span>
-              <h3 id="kpiTdsCount" class="kpi-value">2</h3>
+              <h3 id="kpiTdsCount" class="kpi-value">0</h3>
             </div>
           </div>
 
           <div class="kpi-card">
             <div class="kpi-icon-wrap kpi-emerald">
-              <i data-lucide="dollar-sign" class="kpi-icon"></i>
+              <i data-lucide="wallet" class="kpi-icon"></i>
             </div>
             <div class="kpi-content">
-              <span class="kpi-label">Total Credited</span>
-              <h3 id="kpiTotalCredited" class="kpi-value">₹811</h3>
+              <span class="kpi-label">Total Amount Credited</span>
+              <h3 id="kpiTotalCredited" class="kpi-value">₹0</h3>
             </div>
           </div>
 
           <div class="kpi-card">
             <div class="kpi-icon-wrap kpi-purple">
-              <i data-lucide="landmark" class="kpi-icon"></i>
+              <i data-lucide="credit-card" class="kpi-icon"></i>
             </div>
             <div class="kpi-content">
               <span class="kpi-label">Tax Paid (Part B3)</span>
-              <h3 id="kpiTaxPaid" class="kpi-value">₹2,003</h3>
+              <h3 id="kpiTaxPaid" class="kpi-value">₹0</h3>
             </div>
           </div>
 
           <div class="kpi-card">
             <div class="kpi-icon-wrap kpi-amber">
-              <i data-lucide="shield" class="kpi-icon"></i>
+              <i data-lucide="shield-check" class="kpi-icon"></i>
             </div>
             <div class="kpi-content">
-              <span class="kpi-label">PII Redaction</span>
-              <h3 class="kpi-value" style="font-size:1.15rem; color:var(--ksv-ds-status-success-icon);">100% Blind</h3>
+              <span class="kpi-label">Privacy Guarantee</span>
+              <h3 class="kpi-value" style="font-size:1.15rem; color:var(--ksv-ds-status-success-icon);">100% In-Browser</h3>
             </div>
           </div>
         </div>
@@ -208,15 +179,11 @@
           <div class="tabs-nav" role="tablist">
             <button class="tab-btn active" data-tab="aisview" role="tab">
               <i data-lucide="layout-dashboard" class="tab-icon"></i>
-              <span>Part A & Part B Structured Dashboard</span>
-            </button>
-            <button class="tab-btn" data-tab="jsonview" role="tab">
-              <i data-lucide="code-2" class="tab-icon"></i>
-              <span>Structured JSON (Developer Schema)</span>
+              <span>AIS Summary (Part A & Part B)</span>
             </button>
             <button class="tab-btn" data-tab="pdfview" role="tab" id="pdfViewTabBtn">
               <i data-lucide="file-search" class="tab-icon"></i>
-              <span>AIS PDF Document</span>
+              <span>Document Viewer (Interactive & Text)</span>
             </button>
           </div>
 
@@ -230,34 +197,25 @@
               </div>
             </div>
 
-            <!-- TAB 2: JSON Schema View -->
-            <div id="pane-jsonview" class="tab-pane">
-              <div class="json-schema-card">
-                <div class="json-toolbar">
-                  <div class="json-title-group">
-                    <i data-lucide="braces" class="json-icon"></i>
-                    <span>Clean Structured JSON matching Strict Schema Contract</span>
-                  </div>
-                  <div class="json-actions">
-                    <button id="copyJsonTabBtn" class="btn btn-secondary btn-xs">
-                      <i data-lucide="copy" class="btn-icon-xs"></i>
-                      <span>Copy JSON</span>
-                    </button>
-                    <button id="downloadJsonTabBtn" class="btn btn-primary btn-xs">
-                      <i data-lucide="download" class="btn-icon-xs"></i>
-                      <span>Download .json</span>
-                    </button>
-                  </div>
-                </div>
-                <pre id="fullJsonDisplay" class="code-box full-json-code"></pre>
-              </div>
-            </div>
-
-            <!-- TAB 3: PDF Viewer Canvas -->
+            <!-- TAB 2: Document Viewer Canvas & Text -->
             <div id="pane-pdfview" class="tab-pane">
               <div class="pdf-viewer-card">
                 <div class="pdf-viewer-toolbar">
-                  <div class="pdf-nav-controls">
+                  
+                  <!-- View Switcher: PDF Canvas vs Text Stream -->
+                  <div class="doc-view-toggle">
+                    <button id="viewCanvasBtn" class="btn btn-secondary btn-xs active">
+                      <i data-lucide="file-text" class="btn-icon-xs"></i>
+                      <span>PDF Document</span>
+                    </button>
+                    <button id="viewTextBtn" class="btn btn-secondary btn-xs">
+                      <i data-lucide="align-left" class="btn-icon-xs"></i>
+                      <span>Text Stream</span>
+                    </button>
+                  </div>
+
+                  <!-- PDF Page Navigation -->
+                  <div id="pdfNavControls" class="pdf-nav-controls">
                     <button id="prevPageBtn" class="btn btn-secondary btn-xs" disabled>
                       <i data-lucide="chevron-left" class="btn-icon-xs"></i>
                       <span>Prev</span>
@@ -269,23 +227,38 @@
                     </button>
                   </div>
 
-                  <div class="pdf-zoom-controls">
-                    <button id="zoomOutBtn" class="btn btn-icon btn-xs" title="Zoom Out">
+                  <!-- PDF Zoom Controls -->
+                  <div id="pdfZoomControls" class="pdf-zoom-controls">
+                    <button id="zoomOutBtn" class="btn btn-secondary btn-xs" title="Zoom Out">
                       <i data-lucide="zoom-out" class="btn-icon-xs"></i>
                     </button>
-                    <span id="zoomLevelText" class="zoom-text">100%</span>
-                    <button id="zoomInBtn" class="btn btn-icon btn-xs" title="Zoom In">
+                    <span id="zoomLevelText" class="zoom-text">150%</span>
+                    <button id="zoomInBtn" class="btn btn-secondary btn-xs" title="Zoom In">
                       <i data-lucide="zoom-in" class="btn-icon-xs"></i>
+                    </button>
+                    <button id="zoomFitBtn" class="btn btn-secondary btn-xs" title="Fit Width">
+                      <i data-lucide="maximize-2" class="btn-icon-xs"></i>
+                      <span>Fit</span>
                     </button>
                   </div>
                 </div>
 
+                <!-- PDF Canvas View -->
                 <div class="pdf-canvas-container" id="pdfCanvasContainer">
                   <canvas id="pdfPageCanvas" class="pdf-canvas"></canvas>
                   <div id="pdfNoPreviewMessage" class="no-pdf-placeholder hidden">
-                    <i data-lucide="file-question" class="placeholder-icon"></i>
-                    <p>Sample text loaded. Upload an AIS PDF file or click Load Reference File to view interactive rendering.</p>
+                    <i data-lucide="file-text" class="placeholder-icon"></i>
+                    <p class="font-semibold text-primary">Text / CSV Document Loaded</p>
+                    <p class="text-xs text-secondary mt-1">Click the "Text Stream" button above to view the full document contents.</p>
                   </div>
+                </div>
+
+                <!-- Text Stream View (Hidden by default) -->
+                <div id="rawTextContainer" class="raw-text-container hidden">
+                  <div class="text-stream-header">
+                    <span class="text-xs font-semibold text-secondary">Extracted Text Stream (Full Document)</span>
+                  </div>
+                  <pre id="rawTextDisplay" class="doc-text-box"></pre>
                 </div>
               </div>
             </div>
@@ -343,7 +316,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-container">
-        <p class="footer-text">DocuMorph AIS &copy; 2026. Data-blind Indian Tax Extraction Engine with deterministic PII sanitization.</p>
+        <p class="footer-text">AIS &copy; 2026. Annual Information Statement Extraction Engine.</p>
         <div class="footer-links">
           <span>Zero Server Uploads</span>
           <span>&bull;</span>

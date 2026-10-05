@@ -152,6 +152,19 @@ h1, h2, h3, h4, h5, h6 {
   font-size: var(--ksv-ds-text-xl);
   font-weight: var(--ksv-ds-font-weight-extrabold);
   letter-spacing: var(--ksv-ds-tracking-tight);
+  display: flex;
+  align-items: center;
+}
+
+.brand-subtext {
+  font-size: var(--ksv-ds-text-xs);
+  font-weight: var(--ksv-ds-font-weight-semibold);
+  color: var(--ksv-ds-text-brand);
+  background: var(--brand-gradient-subtle);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--ksv-ds-radius-full);
+  margin-left: var(--ksv-ds-space-2);
 }
 
 .brand-gradient {
@@ -408,14 +421,14 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: var(--ksv-ds-space-6);
 }
 
-.upload-features {
+.upload-features, .upload-format-badges {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--ksv-ds-space-2);
 }
 
-.feat-pill {
+.feat-pill, .format-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--ksv-ds-space-1);
@@ -426,12 +439,19 @@ h1, h2, h3, h4, h5, h6 {
   font-size: var(--ksv-ds-text-xs);
   font-weight: var(--ksv-ds-font-weight-medium);
   color: var(--ksv-ds-text-secondary);
+  transition: all var(--ksv-ds-transition-fast);
 }
 
-.feat-icon {
-  width: 13px;
-  height: 13px;
-  color: var(--ksv-ds-status-success-icon);
+.format-pill:hover {
+  border-color: var(--ksv-ds-border-focus);
+  color: var(--ksv-ds-text-primary);
+  background: var(--ksv-ds-bg-surface);
+}
+
+.feat-icon, .format-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--ksv-ds-text-brand);
 }
 
 /* Progress Overlay */
@@ -1280,6 +1300,18 @@ h1, h2, h3, h4, h5, h6 {
   gap: var(--ksv-ds-space-2);
 }
 
+.doc-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--ksv-ds-space-1);
+}
+
+.doc-view-toggle .btn.active {
+  background: var(--ksv-ds-interactive-primary);
+  color: #ffffff;
+  border-color: var(--ksv-ds-interactive-primary);
+}
+
 .page-indicator, .zoom-text {
   font-size: var(--ksv-ds-text-xs);
   font-weight: var(--ksv-ds-font-weight-semibold);
@@ -1287,21 +1319,51 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .pdf-canvas-container {
-  padding: var(--ksv-ds-space-6);
-  max-height: 620px;
+  padding: var(--ksv-ds-space-8);
+  min-height: 700px;
+  max-height: 85vh;
   overflow: auto;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 0 0 var(--ksv-ds-radius-2xl) var(--ksv-ds-radius-2xl);
 }
 
 .pdf-canvas {
-  box-shadow: var(--ksv-ds-shadow-lg);
-  border-radius: var(--ksv-ds-radius-sm);
-  max-width: 100%;
-  height: auto;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  border-radius: var(--ksv-ds-radius-md);
   background: #ffffff;
+  display: block;
+  margin: 0 auto;
+}
+
+.raw-text-container {
+  padding: var(--ksv-ds-space-6);
+  background: var(--ksv-ds-bg-surface);
+  border-radius: 0 0 var(--ksv-ds-radius-2xl) var(--ksv-ds-radius-2xl);
+}
+
+.text-stream-header {
+  padding-bottom: var(--ksv-ds-space-3);
+  margin-bottom: var(--ksv-ds-space-3);
+  border-bottom: 1px solid var(--ksv-ds-border-subtle);
+}
+
+.doc-text-box {
+  background: var(--ksv-ds-bg-canvas);
+  border: 1px solid var(--ksv-ds-border-subtle);
+  border-radius: var(--ksv-ds-radius-lg);
+  padding: var(--ksv-ds-space-6);
+  font-family: var(--ksv-ds-font-mono);
+  font-size: var(--ksv-ds-text-sm);
+  line-height: 1.65;
+  color: var(--ksv-ds-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 75vh;
+  overflow-y: auto;
 }
 
 .no-pdf-placeholder {
@@ -1310,14 +1372,14 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   text-align: center;
   padding: var(--ksv-ds-space-12) var(--ksv-ds-space-6);
-  color: var(--ksv-ds-text-tertiary);
+  color: var(--ksv-ds-text-secondary);
 }
 
 .placeholder-icon {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   margin-bottom: var(--ksv-ds-space-4);
-  color: var(--ksv-ds-text-tertiary);
+  color: var(--ksv-ds-text-brand);
 }
 
 /* ==========================================================================
@@ -1784,14 +1846,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .ais-gen-value {
-  font-size: var(--ksv-ds-text-sm);
+  font-size: var(--ksv-ds-text-base);
   font-weight: var(--ksv-ds-font-weight-bold);
   color: var(--ksv-ds-text-primary);
   display: flex;
   align-items: center;
   gap: var(--ksv-ds-space-2);
   word-break: break-word;
-  line-height: var(--ksv-ds-leading-snug);
+  line-height: var(--ksv-ds-leading-normal);
 }
 
 .ais-deductor-block {

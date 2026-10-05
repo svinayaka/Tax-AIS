@@ -244,22 +244,35 @@ function assembleLineText(items: TextItem[]): string {
 }
 
 /**
- * Render a specific page to an HTML Canvas element
+ * Render a specific page to an HTML Canvas element with HiDPI (Retina) crispness
  */
-export async function renderPageToCanvas(pageObject: any, canvas: HTMLCanvasElement, scale = 1.3): Promise<any> {
+export async function renderPageToCanvas(pageObject: any, canvas: HTMLCanvasElement, scale = 1.5): Promise<any> {
   if (!pageObject || !canvas) return;
+
+  const dpr = Math.max(window.devicePixelRatio || 1, 2);
   const viewport = pageObject.getViewport({ scale });
-  const context = canvas.getContext('2d');
+  const context = canvas.getContext('2d', { alpha: false });
   if (!context) return;
-  
-  canvas.height = viewport.height;
-  canvas.width = viewport.width;
+
+  // Set internal resolution multiplied by DPR for razor-sharp vector text rendering
+  canvas.width = Math.floor(viewport.width * dpr);
+  canvas.height = Math.floor(viewport.height * dpr);
+
+  // Set CSS display size to logical viewport
+  canvas.style.width = `${Math.floor(viewport.width)}px`;
+  canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+  context.save();
+  context.scale(dpr, dpr);
 
   const renderContext = {
     canvasContext: context,
-    viewport: viewport
+    viewport: viewport,
+    enableWebGL: true,
+    renderInteractiveForms: false
   };
 
   await pageObject.render(renderContext).promise;
+  context.restore();
   return viewport;
 }

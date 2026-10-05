@@ -4,7 +4,6 @@ import confetti from 'canvas-confetti';
 import { parsePdfDocument, renderPageToCanvas } from './lib/pdf-parser';
 import { extractStructuredData } from './lib/extractor';
 import { SAMPLE_DOCUMENTS } from './lib/sample-data';
-import { exportToJson, exportToCsv, exportToMarkdown, downloadFile } from './lib/exporter';
 
 // Import Siddi-compliant Stencil / Web Components
 import './components/index';
@@ -17,7 +16,7 @@ import { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
 // ==========================================================================
 interface AppState {
   theme: string;
-  currentFile: File | { name: string } | null;
+  currentFile: File | { name: string; type?: string } | null;
   rawText: string;
   pdfDoc: any;
   currentPageNum: number;
@@ -25,18 +24,20 @@ interface AppState {
   currentZoom: number;
   structuredData: StructuredExtractionResult | null;
   activeTab: string;
+  docViewMode: 'canvas' | 'text';
 }
 
 const state: AppState = {
-  theme: localStorage.getItem('documorph_theme') || 'dark',
+  theme: localStorage.getItem('ais_theme') || 'dark',
   currentFile: null,
   rawText: '',
   pdfDoc: null,
   currentPageNum: 1,
   totalPages: 1,
-  currentZoom: 1.0,
+  currentZoom: 1.5, // Default 150% for high readability
   structuredData: null,
   activeTab: 'aisview',
+  docViewMode: 'canvas',
 };
 
 // Initialize Icons Helper
@@ -82,7 +83,7 @@ function initTheme(): void {
       state.theme = state.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', state.theme);
       document.documentElement.setAttribute('data-ksv-ds-theme', state.theme);
-      localStorage.setItem('documorph_theme', state.theme);
+      localStorage.setItem('ais_theme', state.theme);
       showToast(`Switched to ${state.theme} theme`, 'info', 2000);
     });
   }
@@ -130,9 +131,10 @@ function closePasswordModal(cancelled: boolean = false): void {
 }
 
 // ==========================================================================
-// PDF Parsing & Extraction Orchestrator
+// File Ingestion & Extraction Orchestrator (PDF, TXT, CSV, JSON)
 // ==========================================================================
-async function handlePdfUpload(file: File): Promise<void> {
+async function handleFileUpload(file: File): Promise<void> {
+  const fileName = file.name.toLowerCase();
   const overlay = document.getElementById('uploadProgressOverlay');
   const fill = document.getElementById('progressBarFill');
   const title = document.getElementById('progressStatusTitle');
@@ -141,80 +143,137 @@ async function handlePdfUpload(file: File): Promise<void> {
   if (overlay) overlay.classList.remove('hidden');
 
   try {
-    const parseResult = await parsePdfDocument(
-      file,
-      ({ stage, percent, message }) => {
-        if (fill) fill.style.width = `${percent}%`;
-        if (detail) detail.textContent = message;
-        if (title) {
-          if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
-          if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
-          if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
-          if (stage === 'finishing') title.textContent = 'Sanitizing PII & Building JSON...';
+    if (fileName.endsWith('.pdf') || file.type === 'application/pdf') {
+      // 1. PDF File Processing
+      const parseResult = await parsePdfDocument(
+        file,
+        ({ stage, percent, message }) => {
+          if (fill) fill.style.width = `${percent}%`;
+          if (detail) detail.textContent = message;
+          if (title) {
+            if (stage === 'loading') title.textContent = 'Reading AIS PDF Binary...';
+            if (stage === 'parsing') title.textContent = 'Extracting Layout Stream...';
+            if (stage === 'extracting') title.textContent = 'Parsing Part A & Part B...';
+            if (stage === 'finishing') title.textContent = 'Sanitizing PII & Finalizing...';
+          }
+        },
+        null,
+        promptForPdfPassword
+      );
+
+      state.currentFile = file;
+      state.rawText = parseResult.rawText;
+      state.pdfDoc = parseResult.pdfDoc;
+      state.totalPages = parseResult.pageCount || 1;
+      state.currentPageNum = 1;
+
+      state.structuredData = extractStructuredData(parseResult.rawText);
+
+      // Render First Page to Canvas
+      if (state.pdfDoc) {
+        const page = await state.pdfDoc.getPage(1);
+        const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+        document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
+        if (canvas) {
+          canvas.classList.remove('hidden');
+          await renderPageToCanvas(page, canvas, state.currentZoom);
         }
-      },
-      null,
-      promptForPdfPassword
-    );
+        updatePdfNavControls();
+      }
 
-    state.currentFile = file;
-    state.rawText = parseResult.rawText;
-    state.pdfDoc = parseResult.pdfDoc;
-    state.totalPages = parseResult.pageCount || 1;
-    state.currentPageNum = 1;
+    } else if (fileName.endsWith('.json') || file.type === 'application/json') {
+      // 2. JSON File Processing
+      if (fill) fill.style.width = '50%';
+      if (title) title.textContent = 'Reading JSON Schema...';
+      const textContent = await file.text();
+      state.currentFile = file;
+      state.rawText = textContent;
+      state.pdfDoc = null;
+      state.totalPages = 1;
+      state.currentPageNum = 1;
 
-    // Run AIS Extraction Pipeline
-    const structured = extractStructuredData(parseResult.rawText);
-    state.structuredData = structured;
+      try {
+        const parsedJson = JSON.parse(textContent);
+        if (parsedJson.part_a_general_info || parsedJson.part_b1_tds_tcs_transactions) {
+          state.structuredData = {
+            documentClassification: {
+              type: 'ais',
+              confidence: 'high',
+              score: 98,
+              label: 'Annual Information Statement (AIS - Form 168)',
+              icon: 'file-text',
+              themeColor: 'var(--ksv-ds-color-indigo-500)'
+            },
+            summary: {
+              overview: `Annual Information Statement for Tax Year ${parsedJson.tax_year || '2026-27'}`,
+              keyHighlights: [],
+              completeness: 'Complete'
+            },
+            metadata: {
+              extractionDurationMs: 5,
+              characterCount: textContent.length,
+              wordCount: textContent.split(/\s+/).length,
+              lineCount: textContent.split('\n').length,
+              confidenceScore: 98,
+              extractedAt: new Date().toISOString()
+            },
+            keyValues: {},
+            flatKeyValues: [],
+            entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
+            tables: [],
+            sections: [],
+            customFieldResults: {},
+            aisJson: parsedJson
+          };
+        } else {
+          state.structuredData = extractStructuredData(textContent);
+        }
+      } catch {
+        state.structuredData = extractStructuredData(textContent);
+      }
 
-    // Render results
+    } else {
+      // 3. Text or CSV File Processing
+      if (fill) fill.style.width = '50%';
+      if (title) title.textContent = 'Reading Document Text...';
+      const textContent = await file.text();
+      state.currentFile = file;
+      state.rawText = textContent;
+      state.pdfDoc = null;
+      state.totalPages = 1;
+      state.currentPageNum = 1;
+
+      state.structuredData = extractStructuredData(textContent);
+    }
+
+    // Update Views
     renderAllViews(file.name);
 
-    // Render PDF first page in canvas
-    if (state.pdfDoc) {
-      const page = await state.pdfDoc.getPage(1);
-      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
-      document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
-      if (canvas) {
-        canvas.classList.remove('hidden');
-        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
-      }
-      updatePdfNavControls();
+    // Hide PDF canvas if not a PDF file
+    const canvas = document.getElementById('pdfPageCanvas');
+    const placeholder = document.getElementById('pdfNoPreviewMessage');
+    if (!state.pdfDoc) {
+      if (canvas) canvas.classList.add('hidden');
+      if (placeholder) placeholder.classList.remove('hidden');
+      setDocViewMode('text');
+    } else {
+      setDocViewMode('canvas');
     }
 
     // Success celebration
     triggerConfetti();
-    showToast('AIS Part A & Part B extracted successfully with PII scrubbing!', 'success');
+    showToast('AIS extracted successfully!', 'success');
 
   } catch (error: any) {
-    console.error('Error parsing AIS PDF:', error);
-    showToast(`Failed to parse AIS PDF: ${error?.message || 'Unknown error'}`, 'error', 4000);
+    console.error('Error parsing document:', error);
+    showToast(`Failed to parse document: ${error?.message || 'Unknown error'}`, 'error', 4000);
   } finally {
     if (overlay) overlay.classList.add('hidden');
   }
 }
 
-async function loadReferenceAisPdf(): Promise<void> {
-  try {
-    const response = await fetch('/src/assets/XXXPV2797X_2026-27_AIS_unlocked.pdf');
-    if (!response.ok) {
-      // Fallback to sample text if direct asset fetch is restricted
-      handleLoadSample('ais');
-      return;
-    }
-    const blob = await response.blob();
-    const file = new File([blob], 'XXXPV2797X_2026-27_AIS_unlocked.pdf', { type: 'application/pdf' });
-    await handlePdfUpload(file);
-  } catch (err) {
-    console.warn('Loading fallback sample text:', err);
-    handleLoadSample('ais');
-  }
-}
-
-function handleLoadSample(sampleId: string): void {
-  const sample = SAMPLE_DOCUMENTS.find(s => s.id === sampleId) || SAMPLE_DOCUMENTS[0];
-  if (!sample) return;
-
+// Sample Loader for Testing
+async function loadSampleAis(): Promise<void> {
   const overlay = document.getElementById('uploadProgressOverlay');
   const fill = document.getElementById('progressBarFill');
   const title = document.getElementById('progressStatusTitle');
@@ -222,35 +281,54 @@ function handleLoadSample(sampleId: string): void {
 
   if (overlay) overlay.classList.remove('hidden');
   if (fill) fill.style.width = '30%';
-  if (title) title.textContent = 'Loading Reference AIS...';
+  if (title) title.textContent = 'Loading Reference AIS File...';
   if (detail) detail.textContent = 'Extracting Part A & Part B...';
 
-  setTimeout(() => {
-    if (fill) fill.style.width = '100%';
-
-    state.currentFile = { name: 'XXXPV2797X_2026-27_AIS_unlocked.pdf' };
-    state.rawText = sample.rawText;
-    state.pdfDoc = null;
-    state.totalPages = 1;
-    state.currentPageNum = 1;
-
-    // Extract Structured Data
-    state.structuredData = extractStructuredData(sample.rawText);
-
-    // Hide PDF canvas, show notice if no PDF doc
-    const canvas = document.getElementById('pdfPageCanvas');
-    const placeholder = document.getElementById('pdfNoPreviewMessage');
-    if (canvas && placeholder) {
-      canvas.classList.add('hidden');
-      placeholder.classList.remove('hidden');
+  try {
+    const response = await fetch('/src/assets/XXXPV2797X_2026-27_AIS_unlocked.pdf');
+    if (response.ok) {
+      const blob = await response.blob();
+      const file = new File([blob], 'XXXPV2797X_2026-27_AIS_unlocked.pdf', { type: 'application/pdf' });
+      await handleFileUpload(file);
+      return;
     }
+  } catch (e) {
+    console.warn('Direct asset fetch fallback:', e);
+  }
 
-    renderAllViews('Annual Information Statement (AIS - Form 168)');
-    if (overlay) overlay.classList.add('hidden');
+  // Fallback to sample text
+  const sample = SAMPLE_DOCUMENTS.find(s => s.id === 'ais') || SAMPLE_DOCUMENTS[0];
+  state.currentFile = { name: 'AIS_Reference_2026-27.txt', type: 'text/plain' };
+  state.rawText = sample.rawText;
+  state.pdfDoc = null;
+  state.totalPages = 1;
+  state.currentPageNum = 1;
+  state.structuredData = extractStructuredData(sample.rawText);
 
-    triggerConfetti();
-    showToast('Loaded Reference AIS (Tax Year 2026-27)!', 'success');
-  }, 250);
+  renderAllViews('AIS_Reference_2026-27.txt');
+  setDocViewMode('text');
+  if (overlay) overlay.classList.add('hidden');
+
+  triggerConfetti();
+  showToast('Loaded Reference AIS Sample!', 'success');
+}
+
+function resetToFreshUpload(): void {
+  state.currentFile = null;
+  state.rawText = '';
+  state.pdfDoc = null;
+  state.structuredData = null;
+  state.currentPageNum = 1;
+
+  // Show upload section, hide results
+  document.getElementById('uploadSection')?.classList.remove('hidden');
+  document.getElementById('resultsWorkspace')?.classList.add('hidden');
+
+  const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
+  if (fileInput) fileInput.value = '';
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast('Ready for new upload', 'info', 2000);
 }
 
 function triggerConfetti(): void {
@@ -274,7 +352,8 @@ function renderAllViews(_fileName: string): void {
   const partB1 = ais.part_b1_tds_tcs_transactions || [];
   const partB3 = ais.part_b3_tax_payments || [];
 
-  // Reveal Workspace
+  // Reveal Workspace & Hide Upload Screen
+  document.getElementById('uploadSection')?.classList.add('hidden');
   const workspace = document.getElementById('resultsWorkspace');
   if (workspace) {
     workspace.classList.remove('hidden');
@@ -285,11 +364,15 @@ function renderAllViews(_fileName: string): void {
   const titleEl = document.getElementById('docTitleHeading');
   const yearEl = document.getElementById('taxYearBannerBadge');
   const summaryEl = document.getElementById('docSummaryText');
+  const formatBadge = document.getElementById('docFormatBadge');
 
-  if (titleEl) titleEl.textContent = `Annual Information Statement (AIS - Form 168)`;
+  if (titleEl) titleEl.textContent = `Annual Information Statement (AIS)`;
   if (yearEl) yearEl.textContent = `Tax Year: ${ais.tax_year || '2026-27'}`;
+  if (formatBadge) {
+    formatBadge.textContent = state.pdfDoc ? 'AIS PDF (Form 168)' : 'AIS Document';
+  }
   if (summaryEl) {
-    summaryEl.textContent = `Assessee: ${partA.name_of_assessee} (PAN: ${partA.pan}), ${partB1.length} TDS Deductor source(s), ${partB3.length} Tax Payment challan(s) extracted.`;
+    summaryEl.textContent = `Assessee: ${partA.name_of_assessee || 'Assessee'} (PAN: ${partA.pan || '—'}), ${partB1.length} TDS Deductor source(s), ${partB3.length} Tax Payment challan(s) extracted.`;
   }
 
   // 2. Render KPI Cards
@@ -307,10 +390,10 @@ function renderAllViews(_fileName: string): void {
   // 3. Render AIS Dashboard (Part A & Part B)
   renderAisDashboard(ais);
 
-  // 4. Render JSON Schema Tab
-  const jsonDisplay = document.getElementById('fullJsonDisplay');
-  if (jsonDisplay) {
-    jsonDisplay.textContent = exportToJson(data, true);
+  // 4. Populate Document Text Stream
+  const rawTextDisplay = document.getElementById('rawTextDisplay');
+  if (rawTextDisplay) {
+    rawTextDisplay.textContent = state.rawText;
   }
 
   refreshIcons();
@@ -354,10 +437,10 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       <div class="ais-part-section">
         <div class="ais-part-header">
           <div class="ais-part-title-wrap">
-            <i data-lucide="receipt" class="ais-part-icon" style="color:var(--color-blue);"></i>
+            <i data-lucide="receipt" class="ais-part-icon" style="color:var(--ksv-ds-color-sky-500);"></i>
             <h3 class="ais-part-title">Part B1 — Tax Deducted or Collected at Source (TDS / TCS)</h3>
           </div>
-          <span class="meta-pill">${partB1.length} Deductor Sources</span>
+          <span class="meta-pill">${partB1.length} Deductor Source(s)</span>
         </div>
 
         <div class="ais-deductors-container">
@@ -399,8 +482,8 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
                         <td><span class="meta-pill" style="font-size:0.75rem;">${escapeHtml(item.quarter)}</span></td>
                         <td>${escapeHtml(item.date_of_payment)}</td>
                         <td><strong>₹${Number(item.amount_paid_credited).toLocaleString('en-IN')}</strong></td>
-                        <td style="color:var(--ksv-ds-status-warning-icon);">₹${Number(item.tds_deducted).toLocaleString('en-IN')}</td>
-                        <td style="color:var(--ksv-ds-status-success-icon);">₹${Number(item.tds_deposited).toLocaleString('en-IN')}</td>
+                        <td style="color:var(--ksv-ds-status-warning-icon); font-weight:600;">₹${Number(item.tds_deducted).toLocaleString('en-IN')}</td>
+                        <td style="color:var(--ksv-ds-status-success-icon); font-weight:600;">₹${Number(item.tds_deposited).toLocaleString('en-IN')}</td>
                         <td>
                           <span class="status-pill-active">
                             <i data-lucide="check-circle-2" class="btn-icon-xs"></i>
@@ -474,7 +557,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       <div class="ais-part-section">
         <div class="ais-part-header">
           <div class="ais-part-title-wrap">
-            <i data-lucide="badge-dollar-sign" class="ais-part-icon" style="color:var(--color-amber);"></i>
+            <i data-lucide="badge-dollar-sign" class="ais-part-icon" style="color:var(--ksv-ds-color-amber-500);"></i>
             <h3 class="ais-part-title">Part B4 — Information Relating to Demand and Refund</h3>
           </div>
           <span class="meta-pill">${partB4.length} Records</span>
@@ -527,7 +610,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
 }
 
 // --------------------------------------------------------------------------
-// PDF Canvas Page Navigation
+// PDF Canvas Page Navigation & High-DPI Zoom Controls
 // --------------------------------------------------------------------------
 async function changePdfPage(delta: number): Promise<void> {
   if (!state.pdfDoc) return;
@@ -535,12 +618,17 @@ async function changePdfPage(delta: number): Promise<void> {
   if (newPage < 1 || newPage > state.totalPages) return;
 
   state.currentPageNum = newPage;
-  const page = await state.pdfDoc.getPage(newPage);
+  await reRenderCurrentPdfPage();
+  updatePdfNavControls();
+}
+
+async function reRenderCurrentPdfPage(): Promise<void> {
+  if (!state.pdfDoc) return;
+  const page = await state.pdfDoc.getPage(state.currentPageNum);
   const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
   if (canvas) {
-    await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
+    await renderPageToCanvas(page, canvas, state.currentZoom);
   }
-  updatePdfNavControls();
 }
 
 function updatePdfNavControls(): void {
@@ -553,11 +641,37 @@ function updatePdfNavControls(): void {
   if (nextBtn) nextBtn.disabled = state.currentPageNum >= state.totalPages;
 }
 
+function setDocViewMode(mode: 'canvas' | 'text'): void {
+  state.docViewMode = mode;
+  const canvasContainer = document.getElementById('pdfCanvasContainer');
+  const rawTextContainer = document.getElementById('rawTextContainer');
+  const viewCanvasBtn = document.getElementById('viewCanvasBtn');
+  const viewTextBtn = document.getElementById('viewTextBtn');
+  const pdfNavControls = document.getElementById('pdfNavControls');
+  const pdfZoomControls = document.getElementById('pdfZoomControls');
+
+  if (mode === 'canvas') {
+    canvasContainer?.classList.remove('hidden');
+    rawTextContainer?.classList.add('hidden');
+    viewCanvasBtn?.classList.add('active');
+    viewTextBtn?.classList.remove('active');
+    if (pdfNavControls) pdfNavControls.style.display = state.pdfDoc ? 'flex' : 'none';
+    if (pdfZoomControls) pdfZoomControls.style.display = state.pdfDoc ? 'flex' : 'none';
+  } else {
+    canvasContainer?.classList.add('hidden');
+    rawTextContainer?.classList.remove('hidden');
+    viewCanvasBtn?.classList.remove('active');
+    viewTextBtn?.classList.add('active');
+    if (pdfNavControls) pdfNavControls.style.display = 'none';
+    if (pdfZoomControls) pdfZoomControls.style.display = 'none';
+  }
+}
+
 // ==========================================================================
 // Event Listeners Setup
 // ==========================================================================
 function setupEventListeners(): void {
-  // 1. File Dropzone
+  // 1. File Dropzone & Hidden Input
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
 
@@ -568,11 +682,7 @@ function setupEventListeners(): void {
       const target = e.target as HTMLInputElement;
       const file = target.files?.[0];
       if (file) {
-        if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-          showToast('Please select a valid AIS PDF file.', 'error');
-          return;
-        }
-        handlePdfUpload(file);
+        handleFileUpload(file);
       }
     });
 
@@ -596,21 +706,22 @@ function setupEventListeners(): void {
       const dragEvent = e as DragEvent;
       const file = dragEvent.dataTransfer?.files?.[0];
       if (file) {
-        if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
-          showToast('Please drop a valid AIS PDF file.', 'error');
-          return;
-        }
-        handlePdfUpload(file);
+        handleFileUpload(file);
       }
     });
   }
 
-  // 2. Load Reference AIS Button
+  // 2. Reference AIS Sample Link
   document.getElementById('loadReferenceAisBtn')?.addEventListener('click', () => {
-    loadReferenceAisPdf();
+    loadSampleAis();
   });
 
-  // 3. Workspace Tabs
+  // 3. Re-Upload / Reset Button
+  document.getElementById('reuploadBtn')?.addEventListener('click', () => {
+    resetToFreshUpload();
+  });
+
+  // 4. Workspace Tabs
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-tab') || 'aisview';
@@ -625,95 +736,43 @@ function setupEventListeners(): void {
     });
   });
 
-  // 4. Header Action Buttons
-  document.getElementById('reuploadBtn')?.addEventListener('click', () => {
-    const input = document.getElementById('fileInput') as HTMLInputElement | null;
-    if (input) input.click();
-  });
+  // 5. Document View Switcher (PDF Canvas vs Raw Text)
+  document.getElementById('viewCanvasBtn')?.addEventListener('click', () => setDocViewMode('canvas'));
+  document.getElementById('viewTextBtn')?.addEventListener('click', () => setDocViewMode('text'));
 
-  document.getElementById('copyJsonBtn')?.addEventListener('click', () => {
-    if (!state.structuredData) return;
-    navigator.clipboard.writeText(exportToJson(state.structuredData, true));
-    showToast('Strict JSON Schema copied to clipboard!', 'success');
-  });
-
-  document.getElementById('copyJsonTabBtn')?.addEventListener('click', () => {
-    if (!state.structuredData) return;
-    navigator.clipboard.writeText(exportToJson(state.structuredData, true));
-    showToast('Strict JSON Schema copied to clipboard!', 'success');
-  });
-
-  document.getElementById('downloadJsonTabBtn')?.addEventListener('click', () => {
-    if (!state.structuredData) return;
-    downloadFile(exportToJson(state.structuredData, true), `${state.currentFile?.name?.replace(/\.pdf$/i, '') || 'AIS_2026-27'}_structured.json`, 'application/json');
-    showToast('Downloaded JSON schema file!', 'success');
-  });
-
-  // 5. Export Dropdown Menu
-  const exportBtn = document.getElementById('exportDropdownBtn');
-  const exportMenu = document.getElementById('exportMenu');
-  if (exportBtn && exportMenu) {
-    exportBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      exportMenu.classList.toggle('hidden');
-    });
-
-    document.addEventListener('click', () => {
-      exportMenu.classList.add('hidden');
-    });
-
-    exportMenu.querySelectorAll('.export-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const type = item.getAttribute('data-export');
-        const filename = state.currentFile?.name?.replace(/\.pdf$/i, '') || 'AIS_2026-27';
-        
-        if (type === 'json') {
-          downloadFile(exportToJson(state.structuredData, true), `${filename}.json`, 'application/json');
-          showToast('Exported structured JSON!', 'success');
-        } else if (type === 'csv') {
-          downloadFile(exportToCsv(state.structuredData), `${filename}.csv`, 'text/csv');
-          showToast('Exported structured CSV!', 'success');
-        } else if (type === 'markdown') {
-          downloadFile(exportToMarkdown(state.structuredData), `${filename}.md`, 'text/markdown');
-          showToast('Exported Markdown report!', 'success');
-        } else if (type === 'print') {
-          window.print();
-        }
-      });
-    });
-  }
-
-  // 6. PDF Viewer Controls
+  // 6. PDF Viewer Navigation
   document.getElementById('prevPageBtn')?.addEventListener('click', () => changePdfPage(-1));
   document.getElementById('nextPageBtn')?.addEventListener('click', () => changePdfPage(1));
 
+  // 7. High-DPI Zoom Controls
   document.getElementById('zoomInBtn')?.addEventListener('click', async () => {
-    if (state.currentZoom < 2.0 && state.pdfDoc) {
+    if (state.currentZoom < 2.5 && state.pdfDoc) {
       state.currentZoom += 0.25;
       const zoomText = document.getElementById('zoomLevelText');
       if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
-      const page = await state.pdfDoc.getPage(state.currentPageNum);
-      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
-      if (canvas) {
-        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
-      }
+      await reRenderCurrentPdfPage();
     }
   });
 
   document.getElementById('zoomOutBtn')?.addEventListener('click', async () => {
-    if (state.currentZoom > 0.5 && state.pdfDoc) {
+    if (state.currentZoom > 0.75 && state.pdfDoc) {
       state.currentZoom -= 0.25;
       const zoomText = document.getElementById('zoomLevelText');
       if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
-      const page = await state.pdfDoc.getPage(state.currentPageNum);
-      const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
-      if (canvas) {
-        await renderPageToCanvas(page, canvas, state.currentZoom * 1.3);
-      }
+      await reRenderCurrentPdfPage();
     }
   });
 
-  // 7. Password Modal Controls
+  document.getElementById('zoomFitBtn')?.addEventListener('click', async () => {
+    if (state.pdfDoc) {
+      state.currentZoom = 1.6; // Optimal fit width
+      const zoomText = document.getElementById('zoomLevelText');
+      if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
+      await reRenderCurrentPdfPage();
+    }
+  });
+
+  // 8. Password Modal Controls
   const submitPassword = () => {
     const input = document.getElementById('aisPasswordInput') as HTMLInputElement | null;
     const val = input ? input.value.trim() : '';
@@ -755,13 +814,10 @@ function escapeHtml(str: string | null | undefined): string {
 }
 
 // ==========================================================================
-// Initialization
+// Initialization (Fresh state - no auto-loading!)
 // ==========================================================================
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   refreshIcons();
   setupEventListeners();
-
-  // Load the reference AIS document on launch
-  loadReferenceAisPdf();
 });
