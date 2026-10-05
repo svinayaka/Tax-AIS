@@ -79,6 +79,7 @@ Tax-AIS/
 │   └── style.scss            # Design tokens & layouts (@svinayaka/siddi-design-system)
 ├── .eslintrc.js              # ESLint configuration with SonarJS rules
 ├── .lintstagedrc.json        # Staged files linter & type-check orchestrator
+├── .npmrc                    # GitHub Packages scoped registry auth configuration
 ├── .stylelintrc.json         # Stylelint configuration extending standard CSS rules
 ├── AGENTS.md                 # Developer & AI Agent contribution guidelines
 ├── ARCHITECTURE.md           # System architecture documentation
@@ -215,6 +216,7 @@ Tax-AIS is distributed as a zero-dependency, static Single Page Application (SPA
 
 - **Build Pipeline**: Executed via `npm run build` (`tsc && vite build`), generating optimized bundles inside the `dist/` directory.
 - **Publish Directory**: Netlify serves directly from `dist/` as defined in [`netlify.toml`](file:///Users/siddhivinayaka/Documents/Learning/ais/netlify.toml).
+- **Package Registry Authentication**: Scoped dependency `@svinayaka/siddi-design-system` is fetched from GitHub Packages via [`.npmrc`](file:///Users/siddhivinayaka/Documents/Learning/ais/.npmrc) using the `GITHUB_TOKEN` (or `NPM_TOKEN`) environment variable in Netlify settings.
 - **SPA Fallback Routing**: All wildcard route traffic (`/*`) rewrites to `/index.html` via `[[redirects]]` and `public/_redirects`.
 - **Security & Caching**: Custom HTTP response headers enforce frame sandboxing (`X-Frame-Options: DENY`), MIME sniffing protection (`X-Content-Type-Options: nosniff`), and 1-year immutable caching for `/assets/*`.
 
