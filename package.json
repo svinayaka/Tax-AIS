@@ -13,6 +13,7 @@
     "stylelint": "stylelint 'src/**/*.css'",
     "stylelint:fix": "stylelint 'src/**/*.css' --fix",
     "sonar:check": "eslint src/ && stylelint 'src/**/*.css' && tsc --noEmit",
+    "sonar:scan": "sonar-scanner",
     "prepare": "husky"
   },
   "repository": {
@@ -42,6 +43,7 @@
     "eslint-plugin-sonarjs": "^3.0.7",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
+    "sonarqube-scanner": "^5.0.1",
     "stylelint": "^16.26.1",
     "stylelint-config-standard": "^37.0.0",
     "typescript": "^5.9.3",

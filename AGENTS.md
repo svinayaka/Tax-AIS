@@ -129,13 +129,16 @@ interface AisDeveloperSchema {
 
 ## 6. SonarQube, Stylelint & Code Quality Standards
 
-Code quality and security analysis are strictly enforced on every commit using **SonarQube / SonarCloud rules**, **ESLint (SonarJS)**, and **Stylelint**.
+Code quality and security analysis are strictly enforced on every commit using **SonarQube / SonarCloud rules**, **SonarJS TypeScript Analyzers**, and **Stylelint**.
 
-### SonarQube Standards
-1. **SonarQube Configuration**: Defined in [`sonar-project.properties`](file:///Users/siddhivinayaka/Documents/Learning/ais/sonar-project.properties) (`sonar.projectKey=svinayaka_Tax-AIS`).
-2. **ESLint with SonarJS**:
-   - Implemented via `eslint-plugin-sonarjs` in [`eslint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/eslint.config.js).
-   - Enforces **Cognitive Complexity &le; 30**, dead code detection, duplicate branch detection, security hotspot checking, and clean modular logic.
+### SonarQube TypeScript Standards
+1. **SonarQube Configuration**: Defined in [`sonar-project.properties`](file:///Users/siddhivinayaka/Documents/Learning/ais/sonar-project.properties):
+   - `sonar.projectKey=svinayaka_Tax-AIS`
+   - `sonar.typescript.tsconfigPath=tsconfig.json`
+   - `sonar.typescript.file.suffixes=.ts,.tsx`
+2. **ESLint with SonarJS & TypeScript**:
+   - Implemented via `eslint-plugin-sonarjs` and `@typescript-eslint` in [`eslint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/eslint.config.js).
+   - Enforces **Cognitive Complexity &le; 30**, dead code detection, redundant type aliases, duplicate branch detection, security hotspot checking, and clean modular logic.
 3. **Stylelint Standards**:
    - Implemented via [`stylelint.config.js`](file:///Users/siddhivinayaka/Documents/Learning/ais/.stylelintrc.json) extending `stylelint-config-standard`.
    - Validates all CSS against modern syntax standards and prevents style regressions.
@@ -158,7 +161,7 @@ A Git pre-commit hook is active in `.husky/pre-commit` to prevent committing inv
    [Step 2] tsc --noEmit (Strict TypeScript type-check)
                                |
                                v
-   [Step 3] npm run sonar:check (Full SonarJS & Stylelint check)
+   [Step 3] npm run sonar:check (Full SonarJS, Stylelint & TS check)
                                |
                                v
                   Commit Allowed or Rejected
@@ -176,6 +179,9 @@ npm run dev
 
 # Run comprehensive SonarQube, Stylelint & TypeScript verification
 npm run sonar:check
+
+# Run SonarScanner against SonarQube / SonarCloud server
+npm run sonar:scan
 
 # Run ESLint + SonarJS analysis
 npm run lint

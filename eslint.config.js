@@ -41,7 +41,7 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
 
-      // SonarQube & Code Quality Customizations
+      // SonarQube TypeScript & Code Quality Rules
       'sonarjs/cognitive-complexity': ['error', 30],
       'sonarjs/regex-complexity': 'off', // Specialized multi-token tax & entity regexes
       'sonarjs/no-duplicate-string': 'off', // Tax codes, schema keys, and token names legitimately repeat
@@ -49,10 +49,18 @@ export default [
       'sonarjs/table-header': 'off',
       'sonarjs/link-with-target-blank': 'warn',
       'sonarjs/slow-regex': 'off', // Complex spatial tax regex patterns
+      'sonarjs/redundant-type-aliases': 'error',
+      'sonarjs/prefer-type-guard': 'error',
+      'sonarjs/no-useless-intersection': 'error',
+      'sonarjs/no-redundant-assignments': 'error',
+      'sonarjs/no-all-duplicated-branches': 'error',
+      'sonarjs/no-identical-functions': 'error',
 
       // TypeScript & General Best Practices
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
       'no-debugger': 'error',
       'no-unused-vars': 'off',
