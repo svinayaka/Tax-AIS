@@ -73,7 +73,7 @@ Tax-AIS/
 │   ├── types/
 │   │   └── ais.ts            # Strict TypeScript interfaces & schema contracts
 │   ├── main.ts               # Application orchestrator, theme manager, file ingestion
-│   └── style.css             # Design tokens & layouts (@svinayaka/siddi-design-system)
+│   └── style.scss            # Design tokens & layouts (@svinayaka/siddi-design-system)
 ├── .eslintrc.js              # ESLint configuration with SonarJS rules
 ├── .lintstagedrc.json        # Staged files linter & type-check orchestrator
 ├── .stylelintrc.json         # Stylelint configuration extending standard CSS rules

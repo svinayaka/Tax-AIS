@@ -18,7 +18,7 @@
 - **`src/lib/extractor.ts`**: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund).
 - **`src/lib/exporter.ts`**: Multi-format exporter producing strict JSON Schema, tax filing CSV, and Markdown reports.
 - **`src/components/`**: Stencil-compatible Web Component suite (`<ais-part-a>`, `<ais-deductor-card>`, `<ais-tax-payment-card>`, `<ais-kpi-card>`).
-- **`src/style.css`**: Design tokens and styling built entirely on top of `@svinayaka/siddi-design-system`.
+- **`src/style.scss`**: Design tokens and styling built entirely on top of `@svinayaka/siddi-design-system`.
 - **`src/main.ts`**: Application orchestrator, multi-format ingestion (PDF, TXT, CSV, JSON), theme manager, and event router.
 
 ---
