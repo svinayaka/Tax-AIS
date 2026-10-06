@@ -173,25 +173,13 @@ async function processPdfFile(
 
   state.structuredData = extractStructuredData(parseResult.rawText);
 
-  // Render First Page to Canvas (default to Fit Width)
+  // Render First Page to Canvas
   if (state.pdfDoc) {
     const page = await state.pdfDoc.getPage(1);
     const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
     document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
     if (canvas) {
       canvas.classList.remove('hidden');
-      // Compute fit zoom similar to zoomFitBtn
-      const nativeViewport = page.getViewport({ scale: 1.0 });
-      const container = document.getElementById('pdfCanvasContainer');
-      if (container) {
-        const style = window.getComputedStyle(container);
-        const padH = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-        const innerWidth = container.clientWidth - padH;
-        const fitZoom = innerWidth > 0 ? innerWidth / nativeViewport.width : state.currentZoom;
-        state.currentZoom = fitZoom;
-        const zoomText = document.getElementById('zoomLevelText');
-        if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
-      }
       await renderPageToCanvas(page, canvas, state.currentZoom);
     }
     updatePdfNavControls();
@@ -283,6 +271,26 @@ function updateDocViewDisplay(): void {
   }
 }
 
+/**
+ * Compute and apply "Fit Width" zoom for the current PDF page.
+ * Must be called after the workspace container is visible (non-zero width).
+ */
+async function applyFitZoom(): Promise<void> {
+  if (!state.pdfDoc) return;
+  const page = await state.pdfDoc.getPage(state.currentPageNum);
+  const nativeViewport = page.getViewport({ scale: 1.0 });
+  const container = document.getElementById('pdfCanvasContainer');
+  if (!container) return;
+  const style = window.getComputedStyle(container);
+  const padH = (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+  const innerWidth = container.clientWidth - padH;
+  if (innerWidth <= 0) return;
+  state.currentZoom = innerWidth / nativeViewport.width;
+  const zoomText = document.getElementById('zoomLevelText');
+  if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
+  await reRenderCurrentPdfPage();
+}
+
 async function handleFileUpload(file: File): Promise<void> {
   const fileName = file.name.toLowerCase();
   const overlay = document.getElementById('uploadProgressOverlay');
@@ -303,6 +311,11 @@ async function handleFileUpload(file: File): Promise<void> {
 
     renderAllViews();
     updateDocViewDisplay();
+
+    // Apply fit-width zoom for PDFs after workspace is visible
+    if (state.pdfDoc) {
+      await applyFitZoom();
+    }
 
     triggerConfetti();
     showToast('AIS extracted successfully!', 'success');
@@ -735,22 +748,7 @@ function setupEventListeners(): void {
   });
 
   document.getElementById('zoomFitBtn')?.addEventListener('click', async () => {
-    if (state.pdfDoc) {
-      // Compute zoom to fit the page width within the inner content area of the container.
-      // clientWidth includes padding, so subtract it to get the true drawable width.
-      const page = await state.pdfDoc.getPage(state.currentPageNum);
-      const nativeViewport = page.getViewport({ scale: 1.0 });
-      const container = document.getElementById('pdfCanvasContainer');
-      if (!container) return;
-      const style = window.getComputedStyle(container);
-      const padH = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
-      const innerWidth = container.clientWidth - padH;
-      const fitZoom = innerWidth > 0 ? innerWidth / nativeViewport.width : state.currentZoom;
-      state.currentZoom = fitZoom;
-      const zoomText = document.getElementById('zoomLevelText');
-      if (zoomText) zoomText.textContent = `${Math.round(state.currentZoom * 100)}%`;
-      await reRenderCurrentPdfPage();
-    }
+    await applyFitZoom();
   });
 
   // 8. Password Modal Controls

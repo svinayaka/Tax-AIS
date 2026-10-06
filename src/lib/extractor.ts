@@ -474,8 +474,8 @@ function parseNum(val: unknown): number {
   if (typeof val === 'number') return val;
   if (!val) return 0;
   const cleanStr = String(val).replace(/[₹,Rs.\s]/gi, '').trim();
-  const parsed = parseFloat(cleanStr);
-  return isNaN(parsed) ? 0 : parsed;
+  const parsed = Number.parseFloat(cleanStr);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function extractTaxYear(text: string): string {
@@ -570,7 +570,7 @@ function parseRegexLineItems(text: string): PartB1LineItem[] {
 
   while ((lineMatch = lineItemRegex.exec(text)) !== null) {
     allLineItems.push({
-      sr_no: lineMatch[1] ? parseInt(lineMatch[1], 10) : (allLineItems.length + 1),
+      sr_no: lineMatch[1] ? Number.parseInt(lineMatch[1], 10) : (allLineItems.length + 1),
       quarter: lineMatch[2].trim(),
       date_of_payment: lineMatch[3].trim(),
       amount_paid_credited: parseNum(lineMatch[4]),
@@ -609,12 +609,12 @@ function extractDeductorsFromPipes(lines: string[], allLineItems: PartB1LineItem
     if (line.includes('|') && (line.includes('TDS-') || line.includes('TCS-') || line.includes('Sec 19') || /\([a-z]{4}\d{5}[a-z]\)/i.test(line))) {
       const parts = line.split('|').map(p => p.trim());
       if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('information code')) {
-        const count = parseInt(parts[4], 10) || 3;
+        const count = Number.parseInt(parts[4], 10) || 3;
         const deductorLineItems = allLineItems.splice(0, count);
         const { code, desc } = cleanCodeAndDesc(parts[1], parts[2]);
 
         partB1.push({
-          sr_no: parseInt(parts[0], 10) || (partB1.length + 1),
+          sr_no: Number.parseInt(parts[0], 10) || (partB1.length + 1),
           information_code: code,
           information_description: desc,
           information_source: parts[3] || '',
@@ -632,12 +632,12 @@ function extractDeductorsFromRegex(text: string, allLineItems: PartB1LineItem[])
   const deductorBlockRegex = /(?:(\d+)\s+)?(TDS-[^\s]+|TCS-[^\s]+|TDS-[a-z0-9()/:.[\]-]+)\s+(.+?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
   let dMatch: RegExpExecArray | null;
   while ((dMatch = deductorBlockRegex.exec(text)) !== null) {
-    const count = parseInt(dMatch[5], 10) || 3;
+    const count = Number.parseInt(dMatch[5], 10) || 3;
     const deductorLineItems = allLineItems.splice(0, count);
     const { code, desc } = cleanCodeAndDesc(dMatch[2], dMatch[3]);
 
     partB1.push({
-      sr_no: dMatch[1] ? parseInt(dMatch[1], 10) : (partB1.length + 1),
+      sr_no: dMatch[1] ? Number.parseInt(dMatch[1], 10) : (partB1.length + 1),
       information_code: code,
       information_description: desc,
       information_source: dMatch[4].trim(),
@@ -722,7 +722,7 @@ function extractTaxPaymentsFromPipes(lines: string[]): PartB3TaxPayment[] {
           total_challan_amount: parseNum(parts[8] || parts[4]),
           bsr_code: parts[9] || '',
           date_of_deposit: parts[10] || '',
-          challan_serial_number: parseInt(parts[11], 10) || 0
+          challan_serial_number: Number.parseInt(parts[11], 10) || 0
         });
       }
     }
@@ -743,7 +743,7 @@ function extractTaxPaymentsFromRegex(text: string): PartB3TaxPayment[] {
       total_challan_amount: parseNum(b3Match[5]),
       bsr_code: b3Match[6],
       date_of_deposit: b3Match[7],
-      challan_serial_number: parseInt(b3Match[8], 10)
+      challan_serial_number: Number.parseInt(b3Match[8], 10)
     });
   }
   return partB3;
@@ -762,7 +762,7 @@ function extractTaxPaymentsFallback(text: string): PartB3TaxPayment[] {
       total_challan_amount: parseNum(fbMatch[2]),
       bsr_code: fbMatch[3],
       date_of_deposit: fbMatch[4],
-      challan_serial_number: parseInt(fbMatch[5], 10)
+      challan_serial_number: Number.parseInt(fbMatch[5], 10)
     });
   }
   return partB3;
@@ -800,7 +800,7 @@ function extractPartB2SftTransactions(text: string, lines: string[]): PartB2SftT
         const parts = line.split('|').map(p => p.trim());
         if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr')) {
           partB2.push({
-            sr_no: parseInt(parts[0], 10) || (partB2.length + 1),
+            sr_no: Number.parseInt(parts[0], 10) || (partB2.length + 1),
             information_code: parts[1] || 'SFT-005',
             information_description: parts[2] || 'Specified Financial Transaction',
             information_source: parts[3] || '',
@@ -836,7 +836,7 @@ function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4Demand
         const parts = line.split('|').map(p => p.trim());
         if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr') && /\d{4}-\d{2}/.test(parts[1])) {
           partB4.push({
-            sr_no: parseInt(parts[0], 10) || (partB4.length + 1),
+            sr_no: Number.parseInt(parts[0], 10) || (partB4.length + 1),
             financial_year: parts[1] || '',
             mode: parts[2] || 'Refund',
             nature: parts[3] || 'Tax Refund under Section 244A',

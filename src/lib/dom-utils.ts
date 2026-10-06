@@ -19,8 +19,8 @@ export function escapeHtml(str: string | null | undefined): string {
  * Formats a number as Indian Currency (INR) string: ₹1,23,456
  */
 export function formatInr(amount: number | string | null | undefined): string {
-  const num = typeof amount === 'number' ? amount : parseFloat(String(amount || 0));
-  if (isNaN(num)) return '₹0';
+  const num = typeof amount === 'number' ? amount : Number.parseFloat(String(amount || 0));
+  if (Number.isNaN(num)) return '₹0';
   return '₹' + num.toLocaleString('en-IN');
 }
 

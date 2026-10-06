@@ -3,6 +3,8 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import sonarjs from 'eslint-plugin-sonarjs';
 import unicorn from 'eslint-plugin-unicorn';
+import htmlPlugin from '@html-eslint/eslint-plugin';
+import htmlParser from '@html-eslint/parser';
 
 export default [
   js.configs.recommended,
@@ -66,6 +68,7 @@ export default [
       'unicorn/prefer-dom-node-append': 'error',
       'unicorn/prefer-dom-node-remove': 'error',
       'unicorn/prefer-modern-dom-apis': 'error',
+      'unicorn/prefer-number-properties': 'error', // S7773: prefer Number.parseFloat / Number.parseInt
 
       // TypeScript & General Best Practices
       'no-await-in-loop': 'error',
@@ -84,6 +87,18 @@ export default [
     files: ['src/lib/extractor.ts'],
     rules: {
       'sonarjs/slow-regex': 'off', // Complex spatial multi-token regex patterns for OCR/PDF text extraction
+    },
+  },
+  {
+    files: ['**/*.html'],
+    plugins: {
+      '@html-eslint': htmlPlugin,
+    },
+    languageOptions: {
+      parser: htmlParser,
+    },
+    rules: {
+      '@html-eslint/require-input-label': 'error', // Maps to SonarQube Web:InputWithoutLabelCheck
     },
   },
   {

@@ -8,11 +8,11 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "lint": "eslint src/ index.html",
+    "lint:fix": "eslint src/ index.html --fix",
     "stylelint": "stylelint 'src/**/*.{css,scss}'",
     "stylelint:fix": "stylelint 'src/**/*.{css,scss}' --fix",
-    "sonar:check": "eslint src/ && stylelint 'src/**/*.{css,scss}' && tsc --noEmit",
+    "sonar:check": "eslint src/ index.html && stylelint 'src/**/*.{css,scss}' && tsc --noEmit",
     "sonar:scan": "sonar-scanner",
     "prepare": "husky"
   },
@@ -35,6 +35,8 @@
   "author": "Siddi Vinayaka",
   "license": "MIT",
   "devDependencies": {
+    "@html-eslint/eslint-plugin": "^0.66.1",
+    "@html-eslint/parser": "^0.66.1",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.6.4",
     "@typescript-eslint/eslint-plugin": "^8.71.1",
