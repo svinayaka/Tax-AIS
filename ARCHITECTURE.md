@@ -193,8 +193,8 @@ export interface AisDeveloperSchema {
 The schema is the authoritative output contract. Extractors, exporters, UI consumers, and future Form 26AS extensions must not silently introduce incompatible fields.
 5. Design System Architecture (@svinayaka/siddi-design-system)
 The user interface adheres to token-based design principles provided by @svinayaka/siddi-design-system:
-- Design Tokens: Standardized CSS variables (--ksv-ds-*) manage background surfaces, text hierarchy, border radii, spacing, typography, and semantic status indicators.
-- No Ad-Hoc Theme Values: Themeable visual properties must use design-system tokens instead of hardcoded colors or arbitrary values.
+- Design Tokens: Standardized CSS variables (--ksv-ds-*) manage background surfaces, text hierarchy, border radii, spacing, typography, semantic status indicators, sizing (width/height), and media query breakpoints. No raw pixel values or arbitrary CSS hardcoding is allowed.
+- No Ad-Hoc Theme Values: Themeable visual properties, layouts, and responsive breakpoints must use design-system tokens instead of hardcoded colors, lengths, or arbitrary pixel values.
 - Theme Synchronization: Theme switching updates both data-theme and data-ksv-ds-theme on document.documentElement.
 - Component Consistency: Web Components should use semantic HTML and design-system classes/tokens without bypassing the shared visual system.
 6. Deployment & Static Hosting Architecture (Netlify)

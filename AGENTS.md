@@ -198,6 +198,6 @@ npm run preview
 1. Mandatory Quality Gate: Run npm run sonar:check and npm run build before committing any changes. Both commands MUST pass with 0 errors.
 2. Zero SonarQube Smells: Do not introduce nested ternary operators, redundant assignments, regex duplicate character classes, unbounded wildcards (.*?), excessive cognitive complexity (> 15), or unhandled edge cases.
 3. Zero Mock Fallbacks: Never return hardcoded mock data when parsing fails; return empty arrays or empty strings.
-4. Strict CSS Tokens: Use @svinayaka/siddi-design-system tokens (--ksv-ds-*) exclusively. Never add hardcoded hex values in component templates.
-5. Responsive Layouts: Test desktop (1920px), tablet (900px), and mobile (375px) breakpoints.
+4. Strict CSS Tokens: Use @svinayaka/siddi-design-system tokens (--ksv-ds-*) exclusively for ALL values, including colors, typography, spacing, sizing (width/height), and media queries. Never add hardcoded hex colors, raw pixel lengths, or arbitrary breakpoints in CSS or component templates. If a specific sizing token doesn't exist, utilize the closest existing spacing or breakpoint token as much as possible; NEVER invent new variables or hardcode raw pixel values.
+5. Responsive Layouts: Test desktop (1024px+), tablet (768px), and mobile (640px) breakpoints using standard design system tokens instead of arbitrary sizes.
 6. Theme Support: Ensure both Light and Dark modes remain crisp, legible, and compliant with accessibility contrast ratios.
