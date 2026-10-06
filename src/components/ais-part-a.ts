@@ -49,52 +49,54 @@ export class AisPartA extends HTMLElement {
       </div>
 
       <div class="ais-grid-general">
-        <!-- Row 1: PAN, Aadhaar, Name -->
-        <div class="ais-gen-card">
+        <!-- Row 1: PAN & Aadhaar (Side-by-side on mobile) -->
+        <div class="ais-gen-card ais-gen-col-1 ais-gen-divider-bottom">
           <span class="ais-gen-label">Permanent Account Number (PAN)</span>
           <div class="ais-gen-value font-mono">
             ${escapeHtml(d?.pan || '—')}
           </div>
         </div>
 
-        <div class="ais-gen-card">
+        <div class="ais-gen-card ais-gen-col-1 ais-gen-divider-bottom">
           <span class="ais-gen-label">Aadhaar Number</span>
           <div class="ais-gen-value font-mono">
             ${escapeHtml(d?.aadhaar || '—')}
           </div>
         </div>
 
-        <div class="ais-gen-card">
+        <!-- Row 2: Name of Assessee -->
+        <div class="ais-gen-card ais-gen-col-2 ais-gen-divider-bottom">
           <span class="ais-gen-label">Name of Assessee</span>
           <div class="ais-gen-value">
             ${escapeHtml(d?.name_of_assessee || '—')}
           </div>
         </div>
 
-        <!-- Row 2: DOB, Mobile, Email -->
-        <div class="ais-gen-card">
+        <!-- Row 3: DOB & Mobile (Side-by-side on mobile) -->
+        <div class="ais-gen-card ais-gen-col-1 ais-gen-divider-bottom">
           <span class="ais-gen-label">Date of Birth</span>
           <div class="ais-gen-value">
             ${escapeHtml(d?.date_of_birth || '—')}
           </div>
         </div>
 
-        <div class="ais-gen-card">
+        <div class="ais-gen-card ais-gen-col-1 ais-gen-divider-bottom">
           <span class="ais-gen-label">Mobile Number</span>
           <div class="ais-gen-value font-mono">
             ${escapeHtml(d?.mobile_number || '—')}
           </div>
         </div>
 
-        <div class="ais-gen-card">
+        <!-- Row 4: E-mail Address -->
+        <div class="ais-gen-card ais-gen-col-2 ais-gen-divider-bottom">
           <span class="ais-gen-label">E-mail Address</span>
           <div class="ais-gen-value font-mono" style="font-size:var(--ksv-ds-text-sm);">
             ${escapeHtml(d?.email_address || '—')}
           </div>
         </div>
 
-        <!-- Row 3: Address (Full Width) -->
-        <div class="ais-gen-card" style="grid-column: 1 / -1;">
+        <!-- Row 5: Address (Full Width) -->
+        <div class="ais-gen-card ais-gen-col-2 ais-gen-card--address">
           <span class="ais-gen-label">Address</span>
           <div class="ais-gen-value" style="font-weight:var(--ksv-ds-font-weight-semibold); line-height:var(--ksv-ds-leading-relaxed);">
             ${escapeHtml(d?.address || '—')}

@@ -1887,6 +1887,10 @@ h1, h2, h3, h4, h5, h6 {
   padding: var(--ksv-ds-space-6);
   box-shadow: var(--ksv-ds-shadow-sm);
 
+  @media (max-width: $breakpoint-sm) {
+    padding: var(--ksv-ds-space-4);
+  }
+
   .ais-part-header {
     display: flex;
     align-items: center;
@@ -1894,6 +1898,11 @@ h1, h2, h3, h4, h5, h6 {
     margin-bottom: var(--ksv-ds-space-5);
     padding-bottom: var(--ksv-ds-space-3);
     border-bottom: 1px solid var(--ksv-ds-border-subtle);
+
+    @media (max-width: $breakpoint-sm) {
+      margin-bottom: var(--ksv-ds-space-3);
+      padding-bottom: var(--ksv-ds-space-2);
+    }
   }
 
   .ais-part-title-wrap {
@@ -1926,7 +1935,13 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   @media (max-width: $breakpoint-sm) {
-    grid-template-columns: 1fr;
+    /* Unified single-card presentation on mobile to eliminate clutter and save space */
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--ksv-ds-space-2) var(--ksv-ds-space-4);
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-border-default);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-3) var(--ksv-ds-space-4);
   }
 
   .ais-gen-card {
@@ -1941,6 +1956,36 @@ h1, h2, h3, h4, h5, h6 {
 
     &:hover {
       border-color: var(--ksv-ds-border-focus);
+    }
+
+    @media (max-width: $breakpoint-sm) {
+      /* Remove separate box borders on mobile for a unified clean list */
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: var(--ksv-ds-space-2) 0;
+      box-shadow: none;
+
+      &:hover {
+        border-color: transparent;
+      }
+    }
+  }
+
+  .ais-gen-col-2 {
+    @media (max-width: $breakpoint-sm) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .ais-gen-card--address {
+    grid-column: 1 / -1;
+  }
+
+  .ais-gen-divider-bottom {
+    @media (max-width: $breakpoint-sm) {
+      border-bottom: 1px solid var(--ksv-ds-border-subtle);
+      padding-bottom: var(--ksv-ds-space-2);
     }
   }
 
@@ -1960,6 +2005,10 @@ h1, h2, h3, h4, h5, h6 {
     gap: var(--ksv-ds-space-2);
     word-break: break-word;
     line-height: var(--ksv-ds-leading-normal);
+
+    @media (max-width: $breakpoint-sm) {
+      font-size: var(--ksv-ds-text-sm);
+    }
   }
 }
 
