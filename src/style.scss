@@ -85,6 +85,7 @@ h1, h2, h3, h4, h5, h6 {
 .text-gradient {
   background: var(--brand-gradient);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   display: inline-block;
 }
@@ -113,6 +114,10 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     align-items: center;
     justify-content: space-between;
+
+    @media (max-width: 600px) {
+      padding: var(--ksv-ds-space-3) var(--ksv-ds-space-4);
+    }
   }
 }
 
@@ -160,6 +165,7 @@ h1, h2, h3, h4, h5, h6 {
   .brand-gradient {
     background: var(--brand-gradient);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
   }
 
@@ -168,6 +174,10 @@ h1, h2, h3, h4, h5, h6 {
     font-size: var(--ksv-ds-text-xs);
     color: var(--ksv-ds-text-tertiary);
     font-weight: var(--ksv-ds-font-weight-medium);
+    
+    @media (max-width: 600px) {
+      display: none;
+    }
   }
 }
 
@@ -187,6 +197,11 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: var(--ksv-ds-font-weight-semibold);
     padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
     border-radius: var(--ksv-ds-radius-full);
+    white-space: nowrap;
+
+    @media (max-width: 600px) {
+      display: none;
+    }
   }
 
   .pulse-dot {
@@ -1195,7 +1210,7 @@ h1, h2, h3, h4, h5, h6 {
   overflow: auto;
   max-height: 520px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
   color: var(--ksv-ds-text-secondary);
 
   &.json-code { color: var(--ksv-ds-status-info-icon); }
@@ -1738,6 +1753,8 @@ h1, h2, h3, h4, h5, h6 {
   .ais-part-title {
     font-size: var(--ksv-ds-text-lg);
     font-weight: var(--ksv-ds-font-weight-bold);
+    margin: 0;
+    line-height: 1.2;
   }
 }
 
