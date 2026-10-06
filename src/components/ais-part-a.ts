@@ -23,6 +23,7 @@ export class AisPartA extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this.style.display = 'block';
     this.render();
   }
 
@@ -36,6 +37,7 @@ export class AisPartA extends HTMLElement {
     const d = this._data;
     const taxYear = this.getAttribute('tax-year') || '2026-27';
 
+    this.style.display = 'block';
     this.className = 'ais-part-section';
     this.innerHTML = `
       <div class="ais-part-header">

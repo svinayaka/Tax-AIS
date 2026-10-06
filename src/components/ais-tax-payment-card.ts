@@ -19,12 +19,14 @@ export class AisTaxPaymentCard extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this.style.display = 'block';
     this.render();
   }
 
   render(): void {
     const list = this._payments;
 
+    this.style.display = 'block';
     this.className = 'ais-part-section';
     this.innerHTML = `
       <div class="ais-part-header">

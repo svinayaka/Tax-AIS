@@ -19,6 +19,7 @@ export class AisDeductorCard extends HTMLElement {
   }
 
   connectedCallback(): void {
+    this.style.display = 'block';
     this.render();
   }
 
@@ -27,6 +28,7 @@ export class AisDeductorCard extends HTMLElement {
     const lineItems = d?.line_items ?? [];
     const total = d?.total_amount_credited ?? d?.total_amount ?? 0;
 
+    this.style.display = 'block';
     this.className = 'ais-deductor-block';
     this.innerHTML = `
       <div class="ais-deductor-header">

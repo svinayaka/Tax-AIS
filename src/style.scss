@@ -1875,7 +1875,10 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+ais-part-a,
+ais-tax-payment-card,
 .ais-part-section {
+  display: block;
   background: var(--ksv-ds-bg-surface);
   border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
@@ -1904,12 +1907,21 @@ h1, h2, h3, h4, h5, h6 {
     display: flex;
     align-items: center;
     gap: var(--ksv-ds-space-3);
+
+    @media (max-width: $breakpoint-sm) {
+      align-items: flex-start;
+    }
   }
 
   .ais-part-icon {
     width: var(--ksv-ds-space-5);
     height: var(--ksv-ds-space-5);
     color: var(--ksv-ds-text-brand);
+    flex-shrink: 0;
+
+    @media (max-width: $breakpoint-sm) {
+      margin-top: calc(var(--ksv-ds-space-1) * 0.5);
+    }
   }
 
   .ais-part-title {
@@ -2007,7 +2019,15 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+.ais-deductors-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ksv-ds-space-4);
+}
+
+ais-deductor-card,
 .ais-deductor-block {
+  display: block;
   background: var(--ksv-ds-bg-surface-elevated);
   border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-xl);
@@ -2024,6 +2044,13 @@ h1, h2, h3, h4, h5, h6 {
     gap: var(--ksv-ds-space-3);
     background: var(--ksv-ds-bg-glass-card);
     border-bottom: 1px solid var(--ksv-ds-border-subtle);
+
+    @media (max-width: $breakpoint-sm) {
+      flex-direction: column;
+      align-items: flex-start;
+      padding: var(--ksv-ds-space-3) var(--ksv-ds-space-4);
+      gap: var(--ksv-ds-space-3);
+    }
   }
 
   .ais-deductor-name {
@@ -2035,18 +2062,29 @@ h1, h2, h3, h4, h5, h6 {
   .ais-deductor-meta {
     font-size: var(--ksv-ds-text-xs);
     color: var(--ksv-ds-text-secondary);
+    line-height: var(--ksv-ds-leading-normal);
   }
 
   .ais-deductor-metrics {
     display: flex;
     align-items: center;
     gap: var(--ksv-ds-space-4);
+
+    @media (max-width: $breakpoint-sm) {
+      width: 100%;
+      justify-content: flex-start;
+    }
   }
 
   .ais-metric-pill {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+
+    @media (max-width: $breakpoint-sm) {
+      align-items: flex-start;
+      text-align: left;
+    }
   }
 
   .ais-metric-label {
@@ -2054,12 +2092,14 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--ksv-ds-text-tertiary);
     text-transform: uppercase;
     font-weight: var(--ksv-ds-font-weight-bold);
+    text-align: inherit;
   }
 
   .ais-metric-val {
     font-size: var(--ksv-ds-text-sm);
     font-weight: var(--ksv-ds-font-weight-extrabold);
     color: var(--ksv-ds-status-success-icon);
+    text-align: inherit;
   }
 }
 
