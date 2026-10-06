@@ -70,7 +70,9 @@ export default [
       'unicorn/prefer-modern-dom-apis': 'error',
       'unicorn/prefer-number-properties': 'error', // S7773: prefer Number.parseFloat / Number.parseInt
 
-      // TypeScript & General Best Practices
+      // TypeScript & General Best Practices (including SonarQube S6671)
+      'prefer-promise-reject-errors': 'error', // SonarQube typescript:S6671 - Expected Promise rejection reason to be an Error
+      '@typescript-eslint/prefer-promise-reject-errors': 'error',
       'no-await-in-loop': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
       '@typescript-eslint/no-explicit-any': 'off',

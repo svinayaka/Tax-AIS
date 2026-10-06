@@ -117,10 +117,12 @@ SonarQube TypeScript Standards
    - No Duplicates in Character Classes: Never duplicate characters or specify overlapping character ranges inside [...] (e.g., [a-zA-Z0-9._%+-]).
    - Prevent ReDoS (Catastrophic Backtracking): Avoid unbounded lazy quantifiers (.*?) between match groups. Use bounded negated character classes ([^|\n\r]+) or bounded lengths ([^\n\r]{0,80}?).
    - Email & Token Regexes: Use standard bounded delimiters with word boundaries (e.g., /\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/).
-4. Extraction Integrity & Zero Mock Fallbacks:
+4. Promise Rejection Safety (SonarQube typescript:S6671):
+   - Always reject Promises with an `Error` instance (e.g. `reject(err || new Error('...'))`). Never reject with raw strings, nullish values, or arbitrary non-Error objects. Enforced by `@typescript-eslint/prefer-promise-reject-errors`.
+5. Extraction Integrity & Zero Mock Fallbacks:
    - Parsing engines (src/lib/extractor.ts) must extract document content dynamically.
    - Never inject hardcoded dummy names, mock deductor entities, or dummy challans as fallbacks when document sections are empty or unparsed. Always return clean empty defaults ('', [], 0).
-5. Stylelint Standards:
+6. Stylelint Standards:
    - Implemented via stylelint.config.js extending stylelint-config-standard.
    - Validates all CSS against modern syntax standards and prevents style regressions.
 7. Pre-Commit Hook Validation Workflow (Husky + lint-staged)

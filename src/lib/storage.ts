@@ -77,9 +77,9 @@ export async function saveTaxSession(
       const putRequest = store.put(session);
 
       putRequest.onsuccess = () => resolve();
-      putRequest.onerror = () => reject(putRequest.error);
+      putRequest.onerror = () => reject(putRequest.error || new Error('Failed to save tax session to IndexedDB'));
       tx.oncomplete = () => db.close();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error || new Error('Transaction error while saving tax session'));
     });
   } catch (error) {
     console.warn('Could not persist tax session to IndexedDB:', error);
@@ -115,9 +115,9 @@ export async function loadTaxSession(): Promise<StoredSession | null> {
         }
       };
 
-      getRequest.onerror = () => reject(getRequest.error);
+      getRequest.onerror = () => reject(getRequest.error || new Error('Failed to retrieve tax session from IndexedDB'));
       tx.oncomplete = () => db.close();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error || new Error('Transaction error while reading tax session'));
     });
   } catch (error) {
     console.warn('Could not retrieve tax session from IndexedDB:', error);
@@ -137,9 +137,9 @@ export async function clearTaxSession(): Promise<void> {
       const deleteRequest = store.delete(SESSION_KEY);
 
       deleteRequest.onsuccess = () => resolve();
-      deleteRequest.onerror = () => reject(deleteRequest.error);
+      deleteRequest.onerror = () => reject(deleteRequest.error || new Error('Failed to delete tax session from IndexedDB'));
       tx.oncomplete = () => db.close();
-      tx.onerror = () => reject(tx.error);
+      tx.onerror = () => reject(tx.error || new Error('Transaction error while deleting tax session'));
     });
   } catch (error) {
     console.warn('Could not clear tax session from IndexedDB:', error);
