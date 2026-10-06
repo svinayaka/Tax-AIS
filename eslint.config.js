@@ -69,6 +69,7 @@ export default [
       'unicorn/prefer-dom-node-remove': 'error',
       'unicorn/prefer-modern-dom-apis': 'error',
       'unicorn/prefer-number-properties': 'error', // S7773: prefer Number.parseFloat / Number.parseInt
+      'unicorn/consistent-function-scoping': 'error', // SonarQube typescript:S7721 - Functions should be moved to the highest possible scope
 
       // TypeScript & General Best Practices (including SonarQube S6671)
       'prefer-promise-reject-errors': 'error', // SonarQube typescript:S6671 - Expected Promise rejection reason to be an Error

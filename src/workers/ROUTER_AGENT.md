@@ -287,6 +287,10 @@ Until validated business/profession, presumptive section, residency, turnover/re
     6. Unresolved checks requiring confirmation.
 - **Dedicated AIS Details Modal Window (`#aisModalBackdrop`):**
   - Houses **ONLY** the raw extracted source document ledgers: Part A (Assessee Profile) and Part B (B1 Deductors, B2 SFT, B3 Challans, B4 Demand & Refund).
+  - Launched via 3 direct entrypoints:
+    1. Floating Side Action Button (`#btnFloatingAis`)
+    2. Viewer Toolbar Button (`#btnToolbarOpenAis`)
+    3. Part B Schedules Navigator (`#btnNavOpenAllModal` or category jump buttons `.part-b-nav-btn` with target section scrolling and highlight)
 
 ---
 
@@ -319,14 +323,14 @@ Until validated business/profession, presumptive section, residency, turnover/re
 The calculator extracts and decomposes income strictly from canonical AIS sources:
 1. **Salary Income (`TDS-192`):** Sum of gross `total_amount_credited` from all deductors with information code `TDS-192`.
 2. **Non-Salary Incomes:**
-   - **Interest from Bank Deposits / Savings (`TDS-194A`):** Sum of credited amounts.
+   - **Interest from Bank Deposits / Savings / Securities (`TDS-194A` / `TDS-193` / `TDS-393`):** Sum of credited amounts.
    - **Dividends from Equities / Mutual Funds (`TDS-194K`):** Sum of credited amounts.
    - **Other Income:** Any other compliant non-business/non-capital gain credits.
 3. **Gross Total Income (GTI):**
    $$\text{Gross Total Income} = \text{Salary Income} + \text{Non-Salary Incomes}$$
 
 ### 14.2 Pre-Paid Taxes & Tax Credits
-1. **TDS Deposited:** Sum of all `tds_deposited` (or `tds_deducted`) across all deductors in `part_b1_tds_tcs_transactions`.
+1. **TDS Deposited:** Sum of active `tds_deposited` (or `tds_deducted`) across all deductors in `part_b1_tds_tcs_transactions` (inactive/superseded records from deductor revisions are excluded to prevent duplicate claims).
 2. **Advance & Self-Assessment Tax Paid:** Sum of all `tax_amount` in `part_b3_tax_payments` (Challans).
 3. **Total Tax Credits Available:**
    $$\text{Total Tax Credit} = \text{Total TDS Deposited} + \text{Total Challan Payments}$$
@@ -403,12 +407,16 @@ The complete workflow is organized sequentially on the **main results page**, di
 
 ```text
                ┌──────────────────────────────────────────────────┐
-               │ 1. Header Banner & "Show AIS (Part A & B)" Modal  │
+               │ 1. Header Banner & "Upload Another File"         │
+               │    - File Name, Classification, Reupload Action  │
                └─────────────────────────┬────────────────────────┘
                                          │
                                          ▼
                ┌──────────────────────────────────────────────────┐
-               │ 2. KPI Metrics Grid (TDS Sources, Credits, Paid) │
+               │ 2. Paired KPI Metrics Grid                       │
+               │    - Primary Metric (Left): Total Credited (₹)   │
+               │    - Part B Navigator (Right): B1–B4 Modal Links │
+               │      with TDS Deducted, SFT, Paid, & Refunds     │
                └─────────────────────────┬────────────────────────┘
                                          │
                                          ▼
@@ -442,7 +450,7 @@ The complete workflow is organized sequentially on the **main results page**, di
                └──────────────────────────────────────────────────┘
 ```
 
-The dedicated modal window ([`#aisModalBackdrop`](file:///Users/siddhivinayaka/Documents/Learning/ais/index.html#L280)) remains responsible strictly for raw extracted source tables (**Part A and Part B only**).
+The dedicated modal window ([`#aisModalBackdrop`](file:///Users/siddhivinayaka/Documents/Learning/ais/index.html#L280)) remains responsible strictly for raw extracted source tables (**Part A and Part B only**), accessed via the Floating Side Action Button (`#btnFloatingAis`), the Viewer Toolbar Button (`#btnToolbarOpenAis`), or the Part B Schedules Navigator triggers (`#btnNavOpenAllModal` / `.part-b-nav-btn`).
 
 ---
 

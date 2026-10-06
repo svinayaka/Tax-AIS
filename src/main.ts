@@ -25,7 +25,9 @@ import {
   TAX_RULE_VERSION,
   type AisDeveloperSchema,
   type StructuredExtractionResult,
-  type ItrClassificationResult
+  type ItrClassificationResult,
+  type PartB1TdsTcsTransaction,
+  type PartB1LineItem
 } from './types/ais';
 import { deriveAyFromFy, deriveFyFromAy } from './lib/extractor';
 import { saveTaxSession, loadTaxSession, clearTaxSession, formatRemainingTime } from './lib/storage';
@@ -152,12 +154,25 @@ function closePasswordModal(cancelled = false): void {
   }
 }
 
-function openAisModal(): void {
+function openAisModal(targetSectionId?: string): void {
   const backdrop = document.getElementById('aisModalBackdrop');
   if (backdrop) {
     backdrop.classList.remove('hidden');
     refreshIcons();
-    document.getElementById('btnCloseAisModal')?.focus();
+    if (typeof targetSectionId === 'string' && targetSectionId.length > 0) {
+      setTimeout(() => {
+        const targetEl = document.getElementById(targetSectionId);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          targetEl.classList.add('ais-section-highlight');
+          setTimeout(() => {
+            targetEl.classList.remove('ais-section-highlight');
+          }, 1800);
+        }
+      }, 50);
+    } else {
+      document.getElementById('btnCloseAisModal')?.focus();
+    }
   }
 }
 
@@ -494,19 +509,49 @@ function renderHeaderBanner(ais: AisDeveloperSchema): void {
   }
 }
 
+function calculateTotalTdsDeducted(transactions: PartB1TdsTcsTransaction[]): number {
+  return transactions.reduce((sum, d) => {
+    const lines = d.line_items || [];
+    const linesTotal = lines.reduce((lSum: number, l: PartB1LineItem) => {
+      const isInactive = (l.status || '').toLowerCase() === 'inactive';
+      return isInactive ? lSum : lSum + (l.tds_deducted || 0);
+    }, 0);
+    return sum + linesTotal;
+  }, 0);
+}
+
+function setElementText(id: string, text: string): void {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
 function renderKpiCards(ais: AisDeveloperSchema): void {
   const partB1 = ais.part_b1_tds_tcs_transactions || [];
+  const partB2 = ais.part_b2_sft_transactions || [];
   const partB3 = ais.part_b3_tax_payments || [];
+  const partB4 = ais.part_b4_demand_refunds || [];
+
   const totalCredited = partB1.reduce((sum, d) => sum + (d.total_amount_credited || d.total_amount || 0), 0);
-  const totalTaxPaid = partB3.reduce((sum, ch) => sum + (ch.tax_amount || 0), 0);
+  const totalTdsDeducted = calculateTotalTdsDeducted(partB1);
+  const totalSftAmount = partB2.reduce((sum, s) => sum + (s.amount || s.transaction_amount || 0), 0);
+  const totalTaxPaid = partB3.reduce((sum, ch) => sum + (ch.tax_amount || ch.total_challan_amount || 0), 0);
+  const totalRefundAmount = partB4.reduce((sum, r) => sum + (r.amount || r.refund_amount || 0), 0);
 
-  const kpiCount = document.getElementById('kpiTdsCount');
-  const kpiCredited = document.getElementById('kpiTotalCredited');
-  const kpiPaid = document.getElementById('kpiTaxPaid');
+  setElementText('kpiTotalCredited', formatInr(totalCredited));
+  setElementText('kpiB1TdsAmount', formatInr(totalTdsDeducted));
+  setElementText('kpiB1Count', `TDS Deducted (${partB1.length} source${partB1.length === 1 ? '' : 's'})`);
 
-  if (kpiCount) kpiCount.textContent = String(partB1.length);
-  if (kpiCredited) kpiCredited.textContent = formatInr(totalCredited);
-  if (kpiPaid) kpiPaid.textContent = formatInr(totalTaxPaid);
+  const kpiB1AmountEl = document.getElementById('kpiB1TdsAmount');
+  if (kpiB1AmountEl) {
+    kpiB1AmountEl.title = 'Total eligible TDS deducted across active transactions valid for tax return credit';
+  }
+
+  setElementText('kpiB2Amount', formatInr(totalSftAmount));
+  setElementText('kpiB2Count', `${partB2.length} SFT record${partB2.length === 1 ? '' : 's'}`);
+  setElementText('kpiB3Amount', formatInr(totalTaxPaid));
+  setElementText('kpiB3Count', `Tax Paid (${partB3.length} challan${partB3.length === 1 ? '' : 's'})`);
+  setElementText('kpiB4Amount', formatInr(totalRefundAmount));
+  setElementText('kpiB4Count', `${partB4.length} record${partB4.length === 1 ? '' : 's'}`);
 }
 
 // ==========================================================================
@@ -597,10 +642,10 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       </div>
 
       <!-- PART A: General Information Web Component -->
-      <ais-part-a financial-year="${escapeHtml(ais.financial_year || '')}" assessment-year="${escapeHtml(ais.assessment_year || '')}" tax-year="${escapeHtml(ais.assessment_year || ais.tax_year || '')}"></ais-part-a>
+      <ais-part-a id="modalSectionPartA" financial-year="${escapeHtml(ais.financial_year || '')}" assessment-year="${escapeHtml(ais.assessment_year || '')}" tax-year="${escapeHtml(ais.assessment_year || ais.tax_year || '')}"></ais-part-a>
 
       <!-- PART B1: TDS / TCS Transactions -->
-      <div class="ais-part-section">
+      <div class="ais-part-section" id="modalSectionPartB1">
         <div class="ais-part-header">
           <div class="ais-part-title-wrap">
             <i data-lucide="receipt" class="ais-part-icon" style="color:var(--ksv-ds-color-sky-500);"></i>
@@ -620,7 +665,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       </div>
 
       <!-- PART B2: SFT Transactions -->
-      <div class="ais-part-section">
+      <div class="ais-part-section" id="modalSectionPartB2">
         <div class="ais-part-header">
           <div class="ais-part-title-wrap">
             <i data-lucide="trending-up" class="ais-part-icon" style="color:var(--ksv-ds-color-violet-500);"></i>
@@ -665,10 +710,10 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       </div>
 
       <!-- PART B3: Payment of Taxes Web Component -->
-      <ais-tax-payment-card></ais-tax-payment-card>
+      <ais-tax-payment-card id="modalSectionPartB3"></ais-tax-payment-card>
 
       <!-- PART B4: Demand and Refund -->
-      <div class="ais-part-section">
+      <div class="ais-part-section" id="modalSectionPartB4">
         <div class="ais-part-header">
           <div class="ais-part-title-wrap">
             <i data-lucide="badge-dollar-sign" class="ais-part-icon" style="color:var(--ksv-ds-color-amber-500);"></i>
@@ -852,9 +897,19 @@ function setupEventListeners(): void {
   });
 
   // 4. AIS Details Modal Controls (Part A & Part B)
-  document.getElementById('btnOpenAisModal')?.addEventListener('click', openAisModal);
-  document.getElementById('btnFloatingAis')?.addEventListener('click', openAisModal);
-  document.getElementById('btnToolbarOpenAis')?.addEventListener('click', openAisModal);
+  document.getElementById('btnFloatingAis')?.addEventListener('click', () => openAisModal());
+  document.getElementById('btnToolbarOpenAis')?.addEventListener('click', () => openAisModal());
+  document.getElementById('btnNavOpenAllModal')?.addEventListener('click', () => openAisModal());
+
+  document.querySelectorAll<HTMLButtonElement>('.part-b-nav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.targetPart;
+      if (target) {
+        openAisModal(target);
+      }
+    });
+  });
+
   document.getElementById('btnCloseAisModal')?.addEventListener('click', closeAisModal);
   document.getElementById('btnCloseAisModalFooter')?.addEventListener('click', closeAisModal);
 

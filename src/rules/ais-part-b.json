@@ -1,0 +1,173 @@
+{
+  "rulesetVersion": "1.0",
+  "statutoryRegime": "ITA_1961",
+  "part": "B",
+  "required": true,
+
+  "sectionDetection": {
+    "partMarker": "Part B",
+    "sectionPattern": "Part B([0-9]+)",
+    "discoverAllNumberedSections": true,
+    "unknownSectionPolicy": "preserve-as-unsupported"
+  },
+
+  "sections": {
+    "B1": {
+      "name": "TDS/TCS Transactions",
+      "supported": true,
+      "parser": "partB1",
+      "recordsField": "part_b1_tds_tcs_transactions",
+
+      "startMarkers": [
+        "Part B1",
+        "Information relating to tax deducted or collected at source"
+      ],
+
+      "endBoundary": {
+        "type": "NEXT_PART_B_SECTION"
+      },
+
+      "summaryFields": [
+        "sr_no",
+        "information_code",
+        "information_description",
+        "information_source",
+        "total_amount_credited"
+      ],
+
+      "lineItemFields": [
+        "sr_no",
+        "quarter",
+        "date_of_payment",
+        "amount_paid_credited",
+        "tds_deducted",
+        "tds_deposited",
+        "status"
+      ],
+
+      "rules": {
+        "parseWithinPhysicalBlockOnly": true,
+        "preserveActiveRows": true,
+        "preserveInactiveRows": true,
+        "useSummaryCountForRowAssignment": false,
+        "allowGlobalLineItemPool": false,
+        "filterInformationCodePrefixes": [
+          "TDS-ANN"
+        ],
+        "allowSyntheticDeductors": false,
+        "allowSyntheticLineItems": false
+      }
+    },
+
+    "B2": {
+      "name": "Specified Financial Transactions",
+      "supported": true,
+      "parser": "partB2",
+      "recordsField": "part_b2_sft_transactions",
+
+      "startMarkers": [
+        "Part B2"
+      ],
+
+      "endBoundary": {
+        "type": "NEXT_PART_B_SECTION"
+      },
+
+      "fields": [
+        "sr_no",
+        "information_code",
+        "information_description",
+        "information_source",
+        "amount",
+        "transaction_date"
+      ],
+
+      "rules": {
+        "amountRepresentsTransactionSignal": true,
+        "treatAsTaxableIncome": false,
+        "inferCapitalGain": false,
+        "inferSTCG": false,
+        "inferLTCG": false
+      }
+    },
+
+    "B3": {
+      "name": "Tax Payments",
+      "supported": true,
+      "parser": "partB3",
+      "recordsField": "part_b3_tax_payments",
+
+      "startMarkers": [
+        "Part B3"
+      ],
+
+      "endBoundary": {
+        "type": "NEXT_PART_B_SECTION"
+      },
+
+      "fields": [
+        "financial_year",
+        "major_head",
+        "minor_head",
+        "tax_amount",
+        "total_challan_amount",
+        "bsr_code",
+        "date_of_deposit",
+        "challan_serial_number"
+      ],
+
+      "rules": {
+        "allowSyntheticMajorHead": false,
+        "allowSyntheticMinorHead": false,
+        "allowWholeDocumentFallback": false
+      }
+    },
+
+    "B4": {
+      "name": "Demand and Refund",
+      "supported": true,
+      "parser": "partB4",
+      "recordsField": "part_b4_demand_refunds",
+
+      "startMarkers": [
+        "Part B4"
+      ],
+
+      "endBoundary": {
+        "type": "NEXT_PART_B_SECTION"
+      },
+
+      "fields": [
+        "financial_year",
+        "mode",
+        "nature",
+        "amount",
+        "date"
+      ],
+
+      "rules": {
+        "allowSyntheticMode": false,
+        "allowSyntheticNature": false,
+        "allowWholeDocumentFallback": false
+      }
+    }
+  },
+
+  "unknownSection": {
+    "supported": false,
+    "status": "unsupported",
+    "preserveSectionId": true,
+    "preserveHeading": true,
+    "preserveBoundaries": true,
+    "parseTransactions": false
+  },
+
+  "failurePolicy": {
+    "sectionAbsentStatus": "not-present",
+    "parseFailureStatus": "failed",
+    "unsupportedSectionStatus": "unsupported",
+    "neverFabricateRecords": true,
+    "neverBorrowRowsAcrossSections": true,
+    "neverBorrowRowsAcrossEntities": true
+  }
+}

@@ -16,7 +16,7 @@ Income-tax Act Transition Boundary
 The currently implemented ITR-classification and tax-calculation rules in Tax-AIS are versioned for Assessment Year 2026-27 under the Income-tax Act, 1961, corresponding to income earned during Financial Year 2025-26.
 From 1 April 2026, the Income-tax Act, 2025 introduces the concept of Tax Year and discontinues the Assessment Year concept for Tax Year 2026-27 onwards.
 Form No. 168 under the Income-tax Rules, 2026 is the Annual Information Statement for the new Tax-Year framework and uses Tax Year rather than Assessment Year.
-Support for Form 168 / Tax Year 2026-27 onwards must therefore be treated as a separately versioned statutory-document/rule mode and must not silently reuse AY 2026-27 assumptions, section numbers, schemas, or ITR-routing rules.
+Support for Form 168 / Tax Year 2026-27 documents is provided in canonical compatibility mode (mapping Tax Year (T.Y.) 2026-27 into the canonical AY 2026-27 / FY 2025-26 schema) with an explicit FORM_168_FUTURE_MODE statutory warning emitted.
 2. Architectural Principles
 1. Privacy First: Sensitive taxpayer data remains strictly on the user's local device.
 2. Deterministic Extraction: Prefer rule-based, spatial, and schema-driven extraction over opaque remote inference.
@@ -49,7 +49,7 @@ The current architecture intentionally does not provide:
 - Personalized legal, accounting, or professional tax advice;
 - Tax calculations outside explicitly implemented and versioned assessment-year rule sets;
 - Complete Form 26AS support until explicitly implemented;
-- Full Form No. 168 / Income-tax Act, 2025 Tax-Year support is not implied by the current AY 2026-27 implementation. It requires separately versioned parsing, canonical period semantics, statutory-section mapping, ITR routing, and tax rules;
+- Form No. 168 / Income-tax Act, 2025 documents are extracted in canonical compatibility mode for AY 2026-27 filing; full native Tax-Year rule engines are reserved for future standalone statutory rule sets;
 - OCR for image-only/scanned documents unless introduced through a separate architectural decision.
 [!IMPORTANT]
 
@@ -134,11 +134,11 @@ PDF / TXT / CSV / Supported JSON
 
      Calculator       │ Triggers: Side Button,
 
-     (Old vs New)     │ Header, Viewer Toolbar
+     (Old vs New)     │ Viewer Toolbar, Part B Nav
 
    - PDF Viewer       │
 
-   - KPIs             │
+   - Paired KPIs      │
 
          ┌────────────┴─────────────────────────┐
 
@@ -373,7 +373,7 @@ A dedicated local tax computation layer that evaluates income tax liability, tax
    - Non-Salary Income: Bank deposit/savings interest under TDS-194A, dividends under TDS-194K, and other supported non-business receipts.
    - Gross Total Income (GTI): Computed from supported taxable income heads ($\text{Salary} + \text{Non-Salary}$), not from raw AIS transaction totals. SFT transaction values and gross remittance values must never be added directly to taxable income.
 3. Pre-Paid Tax Credits:
-   - Total TDS / TCS deposited across all deductors and collectors in Part B1.
+   - Total TDS / TCS deposited across all deductors and collectors in Part B1 (accumulated from Active ledger items; Inactive/superseded records from deductor corrections are excluded to avoid duplicate claims).
    - Advance Tax & Self-Assessment Tax payments deposited in Part B3 (Challans).
 4. Dual-Regime Computation (Official AY 2026-27 Slabs):
    - New Tax Regime (Section 115BAC - Default): Standard deduction of ₹75,000 for salary; revised slab rates:
@@ -784,7 +784,7 @@ Components are standard Custom Elements following Stencil-like conventions:
 - <ais-part-a>: Assessee profile and identity breakdown
 - <ais-itr-advisor>: Statutory ITR form guidance (ITR-1 vs ITR-2/3/4) with dynamic checklist
 - <ais-tax-calculator>: AY-versioned tax computation, Old vs New regime comparison, surcharge/cess breakdown, deduction modelling, and payable/refund presentation
-- <ais-deductor-card>: TDS/TCS deductor entities and quarterly tables with Active (.status-pill-active) and Inactive (.status-pill-inactive) transaction status indicators
+- <ais-deductor-card>: TDS/TCS deductor entities with Total Amount Credited, Active TDS Deducted, and contextual Superseded/Inactive metric pills with CBDT explanation tooltip, alongside quarterly line item tables with Active (.status-pill-active) and Inactive (.status-pill-inactive) status indicators
 - <ais-tax-payment-card>: Challan, BSR code, and advance/self-assessment payments
 - <ais-kpi-card>: Metric summary KPI cards
 Component Rules:
@@ -803,17 +803,18 @@ To maximize clarity, speed, and analytical power:
 2. Dedicated AIS Details Modal Window (Part A & Part B Only): Detailed transaction ledgers that mirror the PDF contents — Part A (Assessee Profile), Part B1 (TDS/TCS Deductor Cards & Quarterly Line Items), Part B2 (SFT Transactions), Part B3 (Challan Tax Payments), and Part B4 (Demand/Refunds) — are housed exclusively inside a high-capacity, scrollable modal window (#aisModalBackdrop / .modal-card--ais-details).
 3. Multi-Access Modal Triggers:
    - Floating Side Action Button (#btnFloatingAis): A persistent, high-visibility floating pill button on the screen edge (.ais-side-action-btn) providing 1-click modal access anywhere in the workspace.
-   - Header Action Button (#btnOpenAisModal): Direct "Show AIS (Part A & B)" trigger button in the main document action header.
    - Viewer Toolbar Button (#btnToolbarOpenAis): Embedded "Show AIS (Part A & B)" trigger located directly in the PDF canvas toolbar next to zoom and navigation controls.
+   - Part B Schedules Navigator (#btnNavOpenAllModal & .part-b-nav-btn): Interactive schedule triggers situated within the main page Paired KPI Grid. Clicking #btnNavOpenAllModal opens the full modal; clicking any category trigger (B1 TDS/TCS, B2 SFT, B3 Challans, B4 Demand/Refund) opens the modal, automatically scrolls to the specified target section, and applies a temporary high-contrast visual focus highlight (.ais-section-highlight).
+   - Note on Header Action: The redundant header button was retired to keep the document action bar uncluttered alongside "Upload Another File" (#reuploadBtn with upload icon).
 4. Accessible Modal Controls: The modal supports keyboard-first and mouse dismissal via the header close button (#btnCloseAisModal), footer close button (#btnCloseAisModalFooter), backdrop click-outside, and the Escape key.
 15.3 Sequential Main Page Flow & Tax Regime Comparison Placement
 On the main results page, content follows a disciplined statutory analytical sequence:
 
                ┌──────────────────────────────────────────────────┐
 
-               │ 1. Document Header & Action Badges               │
+               │ 1. Document Header & "Upload Another File"       │
 
-               │    - "Show AIS (Part A & B)" Modal Trigger       │
+               │    - File Name, Classification, Reupload Action  │
 
                └─────────────────────────┬────────────────────────┘
 
@@ -823,9 +824,13 @@ On the main results page, content follows a disciplined statutory analytical seq
 
                ┌──────────────────────────────────────────────────┐
 
-               │ 2. KPI Metrics Grid                              │
+               │ 2. Paired KPI Metrics Grid                       │
 
-               │    - TDS Sources, Gross Credited, Tax Paid       │
+               │    - Primary Metric (Left): Gross Amount Credited│
+
+               │    - Part B Navigator (Right): B1–B4 Modal Links │
+
+               │      with TDS Deducted, SFT, Paid, & Refunds     │
 
                └─────────────────────────┬────────────────────────┘
 

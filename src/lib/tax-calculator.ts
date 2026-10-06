@@ -137,9 +137,12 @@ export function extractAisIncomeSummary(ais: AisDeveloperSchema | null | undefin
       nonSalaryIncome += amount;
     }
 
-    // Accumulate pre-paid TDS credits
+    // Accumulate pre-paid TDS credits (only active transactions; exclude superseded/inactive records)
     for (const item of txn.line_items ?? []) {
-      totalTdsDeposited += Number(item.tds_deposited || item.tds_deducted) || 0;
+      const isInactive = (item.status || '').toLowerCase() === 'inactive';
+      if (!isInactive) {
+        totalTdsDeposited += Number(item.tds_deposited || item.tds_deducted) || 0;
+      }
     }
   }
 
@@ -268,6 +271,12 @@ export function computeOldRegimeTax(taxableIncome: number): {
   return { slabTax, rebate87A, taxAfterRebate, cess, totalTax };
 }
 
+function getTaxStatus(netBalance: number): TaxPositionStatus {
+  if (netBalance > 0) return 'PAYABLE';
+  if (netBalance < 0) return 'REFUND';
+  return 'NIL';
+}
+
 /**
  * Calculate Dual-Regime Comparison & Optimization Advisory
  */
@@ -284,12 +293,6 @@ export function calculateTaxComparison(
   const taxableIncomeNew = Math.max(0, (salaryIncome - standardDeductionNew) + nonSalaryIncome);
   const newTaxRes = computeNewRegimeTax(taxableIncomeNew);
   const netNew = newTaxRes.totalTax - totalPrePaidTax;
-
-function getTaxStatus(netBalance: number): TaxPositionStatus {
-  if (netBalance > 0) return 'PAYABLE';
-  if (netBalance < 0) return 'REFUND';
-  return 'NIL';
-}
 
   const newRegime: RegimeTaxBreakdown = {
     regime: 'NEW',

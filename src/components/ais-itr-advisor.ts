@@ -88,12 +88,6 @@ export class AisItrAdvisor extends HTMLElement {
     this.className = 'ais-part-section ais-itr-advisor-section';
     this.innerHTML = `
       <div class="ais-part-header">
-        <div class="ais-part-title-wrap">
-          <i data-lucide="scale" class="ais-part-icon" style="color:var(--ksv-ds-text-brand);"></i>
-          <h3 class="ais-part-title">
-            ITR Form Selection Guidance (ITR-1 Sahaj vs. ITR-2 / 3)
-          </h3>
-        </div>
         <div class="ais-itr-header-badges">
           <span id="itrDynamicBadge" class="ais-itr-badge ais-itr-badge--${variant}">
             ${escapeHtml(d.targetWorkspace || d.recommendedForm)}

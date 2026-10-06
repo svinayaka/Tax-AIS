@@ -366,7 +366,7 @@ test('9. Schema Validation Contract - Separate FY and AY Validation', () => {
   assert.ok(validation.verifiedNodes.some(v => v.includes('PAN Identity (ABCDE1234F)')));
 });
 
-test('10. Form 168 is Not Silently Processed as Current AY 2026-27 AIS Mode', () => {
+test('10. Form 168 Extracted in Canonical Compatibility Mode with Statutory Warning', () => {
   const form168Doc = `
 Income-tax Department
 Form No. 168
@@ -377,8 +377,85 @@ Permanent Account Number: ABCDE1234F
 `;
 
   const structured = extractStructuredData(form168Doc);
-  // Must NOT route through current AY 2026-27 AIS extraction
-  assert.equal(structured.extraction, null, 'Form 168 must not produce current AY 2026-27 AIS extraction');
+  assert.ok(structured.extraction, 'Form 168 must produce extraction envelope in canonical compatibility mode');
+  assert.equal(structured.extraction?.part_a_general_info.pan, 'ABCDE1234F');
+  assert.equal(structured.extraction?.assessment_year, '2026-27');
   const form168Warning = structured.warnings.find(w => w.code === 'FORM_168_FUTURE_MODE');
   assert.ok(form168Warning, 'Must emit FORM_168_FUTURE_MODE warning');
+});
+
+test('11. Official Form 168 AIS Document Extraction & Section Parsing', () => {
+  const form168Fixture = `Annual Information Statement (AIS - Form 168) Tax Year (T.Y.) 2026-27
+
+Part A - General Information
+Permanent Account Number (PAN) Aadhaar Number Name of Assessee
+ANRPV2797D XXXX XXXX 2537 SIDDI VINAYAKA
+Date of Birth Mobile Number E-mail Address
+29/07/1988 9480559739 svinayaka290489@gmail.com
+Address
+NO-189/46, 1ST FLOOR,JAMBUSAVARI DINNE,BANNERGHATTA ROAD S.O,BANGALORE SOUTH, BANGALORE,BANGALORE,560076,KARNATAKA
+------------------------------------------------------------------------------------- Annual Information Statement (Part B) --------------------------------------------------------------------------------------
+(All amount values are in INR)
+Part B1-Information relating to tax deducted or collected at source
+Interest from others
+SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
+1 TDS-393(1)[Table: S.No. 5(i)] Interest received on securities (Section 393(1) [Table: 
+S.No. 5(i)])
+AKARA CAPITAL ADVISORS PRIVATE LIMITED (DELA43380B) 3 523
+SR. NO. QUARTER DATE OF PAYMENT/CREDIT AMOUNT PAID/CREDITED TDS DEDUCTED TDS DEPOSITED STATUS
+1 Q1(Apr-Jun) 19/06/2026 204 20 20 Active
+2 Q1(Apr-Jun) 20/05/2026 197 20 20 Active
+3 Q1(Apr-Jun) 20/04/2026 122 12 12 Active
+SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
+2 TDS-393(1)[Table: S.No. 5(i)] Interest received on securities (Section 393(1) [Table: 
+S.No. 5(i)])
+KEERTANA FINSERV LIMITED (CALR17935B) 3 288
+SR. NO. QUARTER DATE OF PAYMENT/CREDIT AMOUNT PAID/CREDITED TDS DEDUCTED TDS DEPOSITED STATUS
+1 Q1(Apr-Jun) 09/06/2026 97 10 10 Active
+2 Q1(Apr-Jun) 09/05/2026 94 9 9 Active
+3 Q1(Apr-Jun) 09/04/2026 97 10 10 Active
+Note - If there is variation between the TDS/TCS information as displayed in Form26AS on TRACES portal, and the TDS/TCS information as displayed in AIS on Compliance Portal, the taxpayer may rely on the 
+information displayed on TRACES portal for the purpose of filing of tax return and for other tax compliance purposes.
+Part B2-Information relating to specified financial transaction (SFT)
+SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
+No Transactions Present
+Part B7-Any other information in relation to sub-rule (2) of rule 114-I
+SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
+No Transactions Present
+Part B3-Information relating to payment of taxes
+SR. NO. FINANCIAL 
+YEAR
+MAJOR HEAD MINOR HEAD TAX (A) SURCHARGE (B) EDUCATION 
+CESS (C)
+OTHERS (D) TOTAL (A+B+C
++D)
+BSR CODE DATE OF 
+DEPOSIT
+CHALLAN 
+SERIAL 
+NUMBER
+CHALLAN IDENTIFICATION NUMBER
+1 2025-26 Income Tax 
+(Other than 
+Companies)
+Self 
+Assessment
+2,003 0 0 0 2,003 0180002 31/07/2026 27897 26073100549820KKBK
+Note - For financial year 2022-23 and earlier, details of tax payments are available in both Form 26AS on the TRACES portal and Annual Information Statement (AIS) on the Compliance Portal.
+Part B4-Information relating to demand and refund
+Refund
+SR. NO. FINANCIAL YEAR MODE NATURE OF REFUND REFUND AMOUNT DATE OF PAYMENT
+No Transactions Present
+Annual Information Statement (AIS - Form 168) Tax Year (T.Y.) 2026-27`;
+
+  const structured = extractStructuredData(form168Fixture);
+  assert.ok(structured.extraction, 'Form 168 extraction envelope must exist');
+  assert.equal(structured.extraction.part_a_general_info.name_of_assessee, 'SIDDI VINAYAKA');
+  assert.equal(structured.extraction.part_a_general_info.pan, 'ANRPV2797D');
+  assert.equal(structured.extraction.assessment_year, '2026-27');
+  assert.equal(structured.extraction.financial_year, '2025-26');
+  assert.equal(structured.extraction.part_b1_tds_tcs_transactions.length, 2);
+  assert.equal(structured.extraction.part_b3_tax_payments.length, 1);
+  assert.equal(structured.extraction.part_b3_tax_payments[0].tax_amount, 2003);
+  assert.equal(structured.extraction.part_b3_tax_payments[0].minor_head, 'Self Assessment');
 });

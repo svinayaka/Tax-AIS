@@ -93,7 +93,15 @@ function processTdsIncome(
     factors.hasSalaryIncome = true;
     metrics.salaryGross += amount;
   }
-  if (code.includes('194A') || desc.includes('interest other than') || desc.includes('interest on savings')) {
+  if (
+    code.includes('194A') ||
+    code.includes('193') ||
+    code.includes('393') ||
+    desc.includes('interest other than') ||
+    desc.includes('interest on savings') ||
+    desc.includes('interest received on securities') ||
+    desc.includes('interest')
+  ) {
     factors.hasInterestIncome = true;
     metrics.interestGross += amount;
   }
@@ -236,7 +244,7 @@ function compileEligibleFactors(factors: ItrDetectedFactors): string[] {
     list.push('Salary income reported under Section 192');
   }
   if (factors.hasInterestIncome) {
-    list.push('Interest income reported under Section 194A (Savings/Fixed Deposits)');
+    list.push('Interest income reported under Section 194A / 193 / 393 (Securities/Deposits)');
   }
   if (factors.hasDividendIncome) {
     list.push('Dividend income reported under Section 194K / 194');

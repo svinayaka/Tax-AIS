@@ -1,0 +1,144 @@
+{
+  "rulesetVersion": "1.0",
+  "statutoryRegime": "ITA_1961",
+  "part": "A",
+  "periodMode": "FY_AY",
+  "required": true,
+
+  "sectionDetection": {
+    "startMarkers": [
+      "Part A",
+      "General Information"
+    ],
+    "endMarkers": [
+      "Part B",
+      "Part B1"
+    ]
+  },
+
+  "fields": {
+    "financial_year": {
+      "type": "string",
+      "required": true,
+      "labels": [
+        "Financial Year",
+        "FY"
+      ],
+      "format": "YYYY-YY",
+      "allowDerivationFromAssessmentYear": true
+    },
+
+    "assessment_year": {
+      "type": "string",
+      "required": true,
+      "labels": [
+        "Assessment Year",
+        "AY"
+      ],
+      "format": "YYYY-YY",
+      "allowDerivationFromFinancialYear": true
+    },
+
+    "name_of_assessee": {
+      "type": "string",
+      "required": true,
+      "labels": [
+        "Name of Assessee",
+        "Assessee Name"
+      ],
+      "emptyValue": ""
+    },
+
+    "pan": {
+      "type": "string",
+      "required": true,
+      "labels": [
+        "PAN",
+        "Permanent Account Number"
+      ],
+      "format": "PAN",
+      "caseInsensitive": true,
+      "emptyValue": ""
+    },
+
+    "aadhaar": {
+      "type": "string",
+      "required": false,
+      "labels": [
+        "Aadhaar",
+        "Aadhaar Number"
+      ],
+      "format": "MASKED_AADHAAR",
+      "emptyValue": ""
+    },
+
+    "date_of_birth": {
+      "type": "string",
+      "required": false,
+      "labels": [
+        "Date of Birth",
+        "DOB"
+      ],
+      "acceptedFormats": [
+        "DD/MM/YYYY",
+        "DD-MM-YYYY"
+      ],
+      "emptyValue": ""
+    },
+
+    "mobile_number": {
+      "type": "string",
+      "required": false,
+      "labels": [
+        "Mobile Number",
+        "Mobile",
+        "Phone"
+      ],
+      "format": "INDIAN_MOBILE",
+      "emptyValue": ""
+    },
+
+    "email_address": {
+      "type": "string",
+      "required": false,
+      "labels": [
+        "Email",
+        "E-mail",
+        "Email Address"
+      ],
+      "format": "EMAIL",
+      "emptyValue": ""
+    },
+
+    "address": {
+      "type": "string",
+      "required": false,
+      "labels": [
+        "Address",
+        "Residential Address"
+      ],
+      "multiline": true,
+      "emptyValue": ""
+    }
+  },
+
+  "validation": {
+    "requiredFields": [
+      "financial_year",
+      "assessment_year",
+      "name_of_assessee",
+      "pan"
+    ],
+    "periodConsistency": {
+      "enabled": true,
+      "relationship": "ASSESSMENT_YEAR_IS_FINANCIAL_YEAR_PLUS_ONE"
+    }
+  },
+
+  "failurePolicy": {
+    "missingSectionStatus": "not-present",
+    "parseFailureStatus": "failed",
+    "unsupportedStatus": "unsupported",
+    "neverFabricateValues": true
+  }
+}

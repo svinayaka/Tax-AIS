@@ -69,12 +69,14 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
 
   // 9. AIS Deterministic extraction if document matches Indian Tax AIS
   const lowerText = cleanedText.toLowerCase();
-  const isForm168Future = lowerText.includes('form 168') || lowerText.includes('form no. 168') || lowerText.includes('form no 168');
-  const isAis = !isForm168Future && (
-    docClassification.type === 'ais' ||
+  const isForm168 = docClassification.type === 'form_168_future' ||
+    lowerText.includes('form 168') ||
+    lowerText.includes('form no. 168') ||
+    lowerText.includes('form no 168');
+  const isAis = docClassification.type === 'ais' ||
+    isForm168 ||
     lowerText.includes('annual information statement') ||
-    (lowerText.includes('assessee') && lowerText.includes('tds') && lowerText.includes('part a'))
-  );
+    (lowerText.includes('assessee') && lowerText.includes('tds') && lowerText.includes('part a'));
 
   let extraction: AisDeveloperSchema | null = null;
   let sectionStatuses: SectionStatuses = {
@@ -86,17 +88,19 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
   };
   let warnings: ExtractionWarning[] = [];
 
-  if (isForm168Future) {
-    warnings.push({
-      code: 'FORM_168_FUTURE_MODE',
-      section: 'A',
-      message: 'Form No. 168 under Income-tax Act, 2025 is a future statutory format and is not routed through AY 2026-27 rules.'
-    });
-  } else if (isAis) {
+  if (isAis) {
     const envelope = extractAisEnvelope(cleanedText);
     extraction = envelope.schema;
     sectionStatuses = envelope.section_statuses;
     warnings = envelope.warnings;
+  }
+
+  if (isForm168) {
+    warnings.push({
+      code: 'FORM_168_FUTURE_MODE',
+      section: 'A',
+      message: 'Form No. 168 under Income-tax Act, 2025 is extracted in canonical compatibility mode with Income-tax Act, 1961 schema.'
+    });
   }
 
   // Assemble full structured output
@@ -576,36 +580,60 @@ export function deriveFyFromAy(ay: string): string {
 }
 
 export function extractFinancialYear(text: string): string {
-  const match = text.match(/(?:Financial\s+Year|F\.?Y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  const match = text.match(/(?<!(?:for|from)\s+)(?:financial\s+year|f\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
   if (!match) return '';
   return normalizeYearRange(match[1]);
 }
 
 export function extractAssessmentYear(text: string): string {
-  const match = text.match(/(?:Assessment\s+Year|A\.?Y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  const match = text.match(/(?:assessment\s+year|a\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
   if (!match) return '';
   return normalizeYearRange(match[1]);
 }
 
-export function extractStatutoryPeriod(text: string): {
-  financial_year: string;
-  assessment_year: string;
-  warnings: ExtractionWarning[];
-} {
-  const warnings: ExtractionWarning[] = [];
+export function extractTaxYearRaw(text: string): string {
+  const match = text.match(/(?:tax\s+year\s*(?:\(t\.?y\.?\))?|t\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  if (!match) return '';
+  return normalizeYearRange(match[1]);
+}
+
+interface ResolvedPeriodYears {
+  fy: string;
+  ay: string;
+  ty: string;
+}
+
+function resolveRawPeriodYears(text: string): ResolvedPeriodYears {
   let fy = extractFinancialYear(text);
   let ay = extractAssessmentYear(text);
+  const ty = extractTaxYearRaw(text);
+
+  if (ty) {
+    ay = ay || ty;
+    fy = fy || deriveFyFromAy(ay);
+  }
+  return { fy, ay, ty };
+}
+
+function validateAndDerivePeriod(
+  period: ResolvedPeriodYears,
+  warnings: ExtractionWarning[]
+): { financial_year: string; assessment_year: string } {
+  let { fy, ay } = period;
 
   if (fy && ay) {
     const expectedAy = deriveAyFromFy(fy);
-    if (expectedAy && expectedAy !== ay) {
+    if (expectedAy && expectedAy !== ay && !period.ty) {
       warnings.push({
         code: 'PERIOD_AMBIGUOUS',
         section: 'A',
         message: 'Discrepancy detected between extracted Financial Year and Assessment Year.'
       });
     }
-  } else if (fy && !ay) {
+    return { financial_year: fy, assessment_year: ay };
+  }
+
+  if (fy && !ay) {
     ay = deriveAyFromFy(fy);
     if (!ay) {
       warnings.push({
@@ -614,7 +642,10 @@ export function extractStatutoryPeriod(text: string): {
         message: 'Could not deterministically derive Assessment Year from Financial Year.'
       });
     }
-  } else if (!fy && ay) {
+    return { financial_year: fy, assessment_year: ay };
+  }
+
+  if (!fy && ay) {
     fy = deriveFyFromAy(ay);
     if (!fy) {
       warnings.push({
@@ -623,24 +654,38 @@ export function extractStatutoryPeriod(text: string): {
         message: 'Could not deterministically derive Financial Year from Assessment Year.'
       });
     }
-  } else {
-    warnings.push({
-      code: 'PERIOD_NOT_FOUND',
-      section: 'A',
-      message: 'Neither Financial Year nor Assessment Year could be identified in the document.'
-    });
+    return { financial_year: fy, assessment_year: ay };
   }
 
+  warnings.push({
+    code: 'PERIOD_NOT_FOUND',
+    section: 'A',
+    message: 'Neither Financial Year nor Assessment Year could be identified in the document.'
+  });
+  return { financial_year: '', assessment_year: '' };
+}
+
+export function extractStatutoryPeriod(text: string): {
+  financial_year: string;
+  assessment_year: string;
+  tax_year?: string;
+  warnings: ExtractionWarning[];
+} {
+  const warnings: ExtractionWarning[] = [];
+  const rawYears = resolveRawPeriodYears(text);
+  const derived = validateAndDerivePeriod(rawYears, warnings);
+
   return {
-    financial_year: fy,
-    assessment_year: ay,
+    financial_year: derived.financial_year,
+    assessment_year: derived.assessment_year,
+    tax_year: rawYears.ty || derived.assessment_year || derived.financial_year || '',
     warnings
   };
 }
 
 export function extractTaxYear(text: string): string {
   const period = extractStatutoryPeriod(text);
-  return period.assessment_year || period.financial_year || '';
+  return period.tax_year || period.assessment_year || period.financial_year || '';
 }
 
 function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
@@ -1050,12 +1095,21 @@ export function extractPartB2SftTransactions(
   return { transactions: partB2, status };
 }
 
+function parseTaxPaymentMajorHead(rawHead: string): string {
+  const cleaned = rawHead.replace(/\s+/g, ' ').trim();
+  const lower = cleaned.toLowerCase();
+  if (lower.includes('income tax (other than companies)')) return 'Income Tax (Other than Companies)';
+  if (lower.includes('income tax')) return 'Income Tax';
+  return cleaned;
+}
+
 function parseTaxPaymentMinorHead(rawHead: string): string {
-  const lower = rawHead.toLowerCase();
+  const normalized = rawHead.replace(/\s+/g, ' ').trim();
+  const lower = normalized.toLowerCase();
   if (lower.includes('advance')) return 'Advance Tax';
   if (lower.includes('regular')) return 'Regular Assessment';
   if (lower.includes('self assessment') || lower.includes('self-assessment')) return 'Self Assessment';
-  return rawHead.trim();
+  return normalized;
 }
 
 function extractTaxPaymentsFromPipes(lines: string[]): PartB3TaxPayment[] {
@@ -1066,7 +1120,7 @@ function extractTaxPaymentsFromPipes(lines: string[]): PartB3TaxPayment[] {
       if (parts.length >= 8 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('financial year')) {
         partB3.push({
           financial_year: parts[1] || '',
-          major_head: parts[2] || '',
+          major_head: parseTaxPaymentMajorHead(parts[2] || ''),
           minor_head: parseTaxPaymentMinorHead(parts[3] || ''),
           tax_amount: parseNum(parts[4]),
           total_challan_amount: parseNum(parts[8] || parts[4]),
@@ -1087,7 +1141,7 @@ function extractTaxPaymentsFromRegex(text: string): PartB3TaxPayment[] {
   while ((b3Match = b3Regex.exec(text)) !== null) {
     partB3.push({
       financial_year: b3Match[2],
-      major_head: b3Match[3]?.trim() || '',
+      major_head: parseTaxPaymentMajorHead(b3Match[3] || ''),
       minor_head: parseTaxPaymentMinorHead(b3Match[3] || ''),
       tax_amount: parseNum(b3Match[4]),
       total_challan_amount: parseNum(b3Match[5]),
@@ -1274,8 +1328,11 @@ function validatePartB1(data: AisDeveloperSchema) {
   partB1.forEach(tx => {
     totalGrossCredited += tx.total_amount_credited || 0;
     (tx.line_items || []).forEach(li => {
-      totalTdsDeducted += li.tds_deducted || 0;
-      totalTdsDeposited += li.tds_deposited || 0;
+      const isInactive = (li.status || '').toLowerCase() === 'inactive';
+      if (!isInactive) {
+        totalTdsDeducted += li.tds_deducted || 0;
+        totalTdsDeposited += li.tds_deposited || 0;
+      }
     });
   });
   const hasTdsCredits = partB1.length > 0 && (totalTdsDeducted > 0 || totalGrossCredited > 0);
@@ -1373,43 +1430,43 @@ function performValidation(data: AisDeveloperSchema, isPiiScrubbed = false): Ver
 }
 
 
+function maskPan(pan: string): string {
+  if (!pan || pan.length < 10) return 'XXXXX0000X';
+  return `${pan.slice(0, 3)}XXXX${pan.slice(7)}`;
+}
+
+function maskAadhaar(aadhaar: string): string {
+  if (!aadhaar) return 'XXXX XXXX 0000';
+  return `XXXX XXXX ${aadhaar.replace(/\s+/g, '').slice(-4)}`;
+}
+
+function maskEmail(email: string): string {
+  if (!email || !email.includes('@')) return 'masked@assessee.tax';
+  const [user, domain] = email.split('@');
+  const maskedUser = user.length > 2 ? `${user[0]}***${user.slice(-1)}` : '***';
+  return `${maskedUser}@${domain}`;
+}
+
+function maskPhone(phone: string): string {
+  if (!phone) return 'XXXXX-XXXXX';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 4) return 'XXXXX-XXXXX';
+  return `XXXXX-XX${digits.slice(-3)}`;
+}
+
+function maskAddress(address: string): string {
+  if (!address) return 'MASKED RESIDENTIAL ADDRESS, INDIA';
+  const parts = address.split(',');
+  const pin = parts.find(p => /\b\d{6}\b/.test(p))?.trim() || 'XXXXXX';
+  const state = parts[parts.length - 1]?.trim() || 'INDIA';
+  return `REDACTED RESIDENTIAL PREMISES, ${pin}, ${state}`;
+}
+
 /**
  * Client-Side PII Scrubber for Safe Diagnostic Sharing and Masked Data Export
  */
 export function scrubAisPii(schema: AisDeveloperSchema): AisDeveloperSchema {
   const info = schema.part_a_general_info;
-
-  const maskPan = (pan: string): string => {
-    if (!pan || pan.length < 10) return 'XXXXX0000X';
-    return `${pan.slice(0, 3)}XXXX${pan.slice(7)}`;
-  };
-
-  const maskAadhaar = (aadhaar: string): string => {
-    if (!aadhaar) return 'XXXX XXXX 0000';
-    return `XXXX XXXX ${aadhaar.replace(/\s+/g, '').slice(-4)}`;
-  };
-
-  const maskEmail = (email: string): string => {
-    if (!email || !email.includes('@')) return 'masked@assessee.tax';
-    const [user, domain] = email.split('@');
-    const maskedUser = user.length > 2 ? `${user[0]}***${user.slice(-1)}` : '***';
-    return `${maskedUser}@${domain}`;
-  };
-
-  const maskPhone = (phone: string): string => {
-    if (!phone) return 'XXXXX-XXXXX';
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 4) return 'XXXXX-XXXXX';
-    return `XXXXX-XX${digits.slice(-3)}`;
-  };
-
-  const maskAddress = (address: string): string => {
-    if (!address) return 'MASKED RESIDENTIAL ADDRESS, INDIA';
-    const parts = address.split(',');
-    const pin = parts.find(p => /\b\d{6}\b/.test(p))?.trim() || 'XXXXXX';
-    const state = parts[parts.length - 1]?.trim() || 'INDIA';
-    return `REDACTED RESIDENTIAL PREMISES, ${pin}, ${state}`;
-  };
 
   return {
     ...schema,
