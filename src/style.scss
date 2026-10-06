@@ -27,7 +27,7 @@ $breakpoint-2xl: 1536px; // var(--ksv-ds-breakpoint-2xl)
   --bg-card: var(--ksv-ds-bg-glass-card);
   --bg-card-hover: var(--ksv-ds-bg-surface-elevated);
   --bg-glass: var(--ksv-ds-bg-glass);
-  --border-subtle: var(--ksv-ds-border-subtle);
+  --border-subtle: var(--ksv-ds-border-default);
   --border-focus: var(--ksv-ds-border-focus);
   --border-strong: var(--ksv-ds-border-default);
   --text-primary: var(--ksv-ds-text-primary);
@@ -74,10 +74,10 @@ $breakpoint-2xl: 1536px; // var(--ksv-ds-breakpoint-2xl)
   --ksv-ds-bg-glass-card: #141c2b;
   --ksv-ds-bg-glass: rgba(20, 28, 43, 0.95);
 
-  /* High-clarity, solid eye-friendly borders (distinct separation across OLED & LCD displays) */
-  --ksv-ds-border-subtle: #334155;
+  /* Consistent, high-clarity eye-friendly borders (unified palette across all components) */
+  --ksv-ds-border-subtle: #475569;
   --ksv-ds-border-default: #475569;
-  --ksv-ds-border-strong: #64748b;
+  --ksv-ds-border-strong: #475569;
   --ksv-ds-border-focus: #818cf8;
 
   /* Enhanced typography contrast for effortless reading without eye fatigue */
@@ -212,7 +212,7 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: var(--ksv-ds-font-weight-semibold);
     color: var(--ksv-ds-text-brand);
     background: var(--brand-gradient-subtle);
-    border: 1px solid var(--ksv-ds-border-focus);
+    border: 1px solid var(--ksv-ds-border-default);
     padding: var(--ksv-ds-space-1) var(--ksv-ds-space-2);
     border-radius: var(--ksv-ds-radius-full);
     margin-left: var(--ksv-ds-space-2);
@@ -390,7 +390,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     gap: var(--ksv-ds-space-2);
     background: var(--brand-gradient-subtle);
-    border: 1px solid var(--ksv-ds-border-focus);
+    border: 1px solid var(--ksv-ds-border-default);
     color: var(--ksv-ds-text-brand);
     font-size: var(--ksv-ds-text-xs);
     font-weight: var(--ksv-ds-font-weight-semibold);
@@ -453,7 +453,7 @@ h1, h2, h3, h4, h5, h6 {
     height: var(--ksv-ds-space-16);
     border-radius: var(--ksv-ds-radius-full);
     background: var(--brand-gradient-subtle);
-    border: 1px solid var(--ksv-ds-border-focus);
+    border: 1px solid var(--ksv-ds-border-default);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -500,7 +500,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: var(--ksv-ds-space-1);
   background: var(--ksv-ds-bg-surface-elevated);
-  border: 1px solid var(--ksv-ds-border-subtle);
+  border: 1px solid var(--ksv-ds-border-default);
   padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
   border-radius: var(--ksv-ds-radius-full);
   font-size: var(--ksv-ds-text-xs);
@@ -592,7 +592,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Session Restored Notice Banner */
 .session-restored-banner {
   background: var(--ksv-ds-status-info-bg);
-  border: 1px solid var(--ksv-ds-status-info-border);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-xl);
   padding: var(--ksv-ds-space-3) var(--ksv-ds-space-5);
   margin-bottom: var(--ksv-ds-space-4);
@@ -660,7 +660,6 @@ h1, h2, h3, h4, h5, h6 {
 
   @media (max-width: $breakpoint-sm) {
     padding: var(--ksv-ds-space-5) var(--ksv-ds-space-4);
-    border-color: var(--ksv-ds-border-strong);
   }
 
   .doc-header-info {
@@ -832,10 +831,6 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: var(--ksv-ds-shadow-sm);
   transition: transform var(--ksv-ds-transition-fast), border-color var(--ksv-ds-transition-fast);
 
-  @media (max-width: $breakpoint-sm) {
-    border-color: var(--ksv-ds-border-strong);
-  }
-
   &:hover {
     transform: translateY(calc(var(--ksv-ds-radius-xs) * -1));
     border-color: var(--ksv-ds-border-focus);
@@ -854,10 +849,10 @@ h1, h2, h3, h4, h5, h6 {
 
   .kpi-icon { width: var(--ksv-ds-space-5); height: var(--ksv-ds-space-5); }
 
-  .kpi-blue { background: var(--ksv-ds-status-info-bg); color: var(--ksv-ds-status-info-icon); border-color: var(--ksv-ds-status-info-border); }
-  .kpi-emerald { background: var(--ksv-ds-status-success-bg); color: var(--ksv-ds-status-success-icon); border-color: var(--ksv-ds-status-success-border); }
+  .kpi-blue { background: var(--ksv-ds-status-info-bg); color: var(--ksv-ds-status-info-icon); }
+  .kpi-emerald { background: var(--ksv-ds-status-success-bg); color: var(--ksv-ds-status-success-icon); }
   .kpi-purple { background: var(--ksv-ds-status-info-bg); color: var(--ksv-ds-color-violet-500); }
-  .kpi-amber { background: var(--ksv-ds-status-warning-bg); color: var(--ksv-ds-status-warning-icon); border-color: var(--ksv-ds-status-warning-border); }
+  .kpi-amber { background: var(--ksv-ds-status-warning-bg); color: var(--ksv-ds-status-warning-icon); }
 
   .kpi-label {
     font-size: var(--ksv-ds-text-xs);
@@ -984,7 +979,7 @@ h1, h2, h3, h4, h5, h6 {
   .search-input {
     width: 100%;
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-md);
     padding: var(--ksv-ds-space-2) var(--ksv-ds-space-8) var(--ksv-ds-space-2) var(--ksv-ds-space-10);
     color: var(--ksv-ds-text-primary);
@@ -1021,7 +1016,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .filter-chip {
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     color: var(--ksv-ds-text-secondary);
     font-size: var(--ksv-ds-text-xs);
     font-weight: var(--ksv-ds-font-weight-semibold);
@@ -1091,7 +1086,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .kv-card {
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-lg);
     padding: var(--ksv-ds-space-3) var(--ksv-ds-space-4);
     position: relative;
@@ -1250,7 +1245,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .entity-group-card {
     background: var(--ksv-ds-bg-surface);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-2xl);
     padding: var(--ksv-ds-space-5);
   }
@@ -1283,7 +1278,7 @@ h1, h2, h3, h4, h5, h6 {
     align-items: center;
     gap: var(--ksv-ds-space-1);
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     color: var(--ksv-ds-text-primary);
     padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
     border-radius: var(--ksv-ds-radius-md);
@@ -1319,7 +1314,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .split-col {
     background: var(--ksv-ds-bg-surface);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-2xl);
     overflow: hidden;
     display: flex;
@@ -1366,7 +1361,7 @@ h1, h2, h3, h4, h5, h6 {
    ========================================================================== */
 .pdf-viewer-card {
   background: var(--ksv-ds-bg-surface);
-  border: 1px solid var(--ksv-ds-border-subtle);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
   overflow: hidden;
   display: flex;
@@ -1447,7 +1442,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .doc-text-box {
     background: var(--ksv-ds-bg-canvas);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-lg);
     padding: var(--ksv-ds-space-6);
     font-family: var(--ksv-ds-font-mono);
@@ -1482,7 +1477,7 @@ h1, h2, h3, h4, h5, h6 {
    ========================================================================== */
 .json-schema-card {
   background: var(--ksv-ds-bg-surface);
-  border: 1px solid var(--ksv-ds-border-subtle);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
   overflow: hidden;
 
@@ -1520,7 +1515,7 @@ h1, h2, h3, h4, h5, h6 {
    ========================================================================== */
 .custom-schema-card {
   background: var(--ksv-ds-bg-surface);
-  border: 1px solid var(--ksv-ds-border-subtle);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
   padding: var(--ksv-ds-space-6);
 
@@ -1552,7 +1547,7 @@ h1, h2, h3, h4, h5, h6 {
   .query-input {
     flex: 1;
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-md);
     padding: 0.65rem var(--ksv-ds-space-4);
     color: var(--ksv-ds-text-primary);
@@ -1581,7 +1576,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .sugg-chip {
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     color: var(--ksv-ds-text-secondary);
     font-size: var(--ksv-ds-text-xs);
     padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
@@ -1704,7 +1699,7 @@ h1, h2, h3, h4, h5, h6 {
 
   .form-input, .form-select, .form-textarea {
     background: var(--ksv-ds-bg-surface-elevated);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-md);
     padding: var(--ksv-ds-space-2) var(--ksv-ds-space-3);
     color: var(--ksv-ds-text-primary);
@@ -1823,7 +1818,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .ais-pii-banner {
   background: var(--brand-gradient-subtle);
-  border: 1px solid var(--ksv-ds-border-focus);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
   padding: var(--ksv-ds-space-4) var(--ksv-ds-space-6);
   display: flex;
@@ -2094,7 +2089,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .ais-challan-card {
   background: var(--ksv-ds-bg-surface-elevated);
-  border: 1px solid var(--ksv-ds-border-subtle);
+  border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-xl);
   padding: var(--ksv-ds-space-5);
   display: flex;
