@@ -13,6 +13,7 @@ Privacy & Security Guarantees
 - No Remote Telemetry or Storage: Tax documents contain sensitive identity and financial data, including PAN, Aadhaar, bank records, addresses, and challan payments. No document buffers, parsed JSON objects, or extracted tax data are transmitted over the network.
 - No Sensitive Logging: Never log PAN, Aadhaar, full names, addresses, bank details, passwords, or extracted document contents to the console, analytics, or error tracking systems.
 - Client-Side Password Unlocking: Encrypted PDFs are decrypted in memory using Mozilla PDF.js password hooks. Password references must not be persisted and should be cleared after decryption.
+- Local Session Persistence (IndexedDB): Uploaded document binary streams and parsed extraction results are persisted 100% locally in the browser's IndexedDB (`tax_ais_local_storage`) with a strict 24-hour time-to-live (TTL). This guarantees session recovery if the device is powered off or rebooted, while automatically purging stale records after 24 hours. Data is immediately overwritten when a new file is uploaded, or purged upon clicking 'Clear Session'. Zero data is ever sent to any remote server or persistent cloud storage.
 - Local PDF.js Worker: The PDF.js worker must be bundled and served locally with the application.
 - Content Security: Avoid eval, new Function, remote script loading, or any runtime mechanism that executes untrusted code.
 +-------------------------------------------------------------------------------+
@@ -65,7 +66,8 @@ Tax-AIS/
 │   ├── lib/                  # Core parsing & extraction libraries
 │   │   ├── exporter.ts       # Multi-format exporter (JSON, CSV, Markdown)
 │   │   ├── extractor.ts      # Spatial & deterministic regex extraction engine
-│   │   └── pdf-parser.ts     # Mozilla PDF.js spatial coordinate reconstructor
+│   │   ├── pdf-parser.ts     # Mozilla PDF.js spatial coordinate reconstructor
+│   │   └── storage.ts        # Client-side IndexedDB persistence with 24h TTL policy
 │   ├── types/
 │   │   └── ais.ts            # Strict TypeScript interfaces & schema contracts
 │   ├── main.ts               # Application orchestrator, theme manager, file ingestion
@@ -130,6 +132,12 @@ Built with standard Custom Elements following Stencil-like component conventions
 - <ais-tax-payment-card>: Renders tax payment challans with BSR codes, deposit dates, and serial numbers.
 - <ais-kpi-card>: Renders top-level financial metrics such as total TDS credited, total tax deposited, and active deductor count.
 Primitive configuration is exposed through observed attributes where appropriate. Complex objects and arrays are passed through reactive property setters/getters.
+3.4 Client-Side Session Persistence Engine (src/lib/storage.ts)
+Provides in-browser power-off resiliency and workspace recovery:
+- IndexedDB Database: Operates under `tax_ais_local_storage` (`sessions` object store) without requiring server connectivity.
+- Dual Payload Retention: Preserves both the binary document buffer (`ArrayBuffer` for PDF.js canvas re-rendering) and normalized structured output (`StructuredExtractionResult`).
+- Time-to-Live (TTL): Strict 24-hour expiration window calculated via `expiresAt = savedAt + 24h`. Expired records are automatically removed upon lookup.
+- Lifecycle Hooks: Automatically saves on upload completion, restores state with a dismissible notification banner upon browser reboot, and provides instant purge capability via the 'Clear Session' user action.
 4. Developer JSON Schema Contract
 When extraction is completed, data is structured according to the AisDeveloperSchema contract:
 export interface AisDeveloperSchema {
