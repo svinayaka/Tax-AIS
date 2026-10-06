@@ -17,6 +17,7 @@ import { AisPartA } from './components/ais-part-a';
 import { AisDeductorCard } from './components/ais-deductor-card';
 import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
 import type { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
+import { saveTaxSession, loadTaxSession, clearTaxSession, formatRemainingTime } from './lib/storage';
 
 // ==========================================================================
 // Application State Interface & Object
@@ -311,6 +312,18 @@ async function handleFileUpload(file: File): Promise<void> {
 
     renderAllViews();
     updateDocViewDisplay();
+
+    // Persist session into IndexedDB (valid for 24 hours, client-side only)
+    if (state.structuredData) {
+      try {
+        const fileBuffer = await file.arrayBuffer();
+        await saveTaxSession(file, fileBuffer, state.rawText, state.structuredData);
+        // Hide session restored banner on new upload since this is a live fresh upload
+        document.getElementById('sessionRestoredBanner')?.classList.add('hidden');
+      } catch (saveErr) {
+        console.warn('Failed to save session to storage:', saveErr);
+      }
+    }
 
     // Apply fit-width zoom for PDFs after workspace is visible
     if (state.pdfDoc) {
@@ -780,13 +793,83 @@ function setupEventListeners(): void {
     const isPass = input.type === 'password';
     input.type = isPass ? 'text' : 'password';
   });
+  // 9. Session Persistence Controls
+  document.getElementById('btnClearSession')?.addEventListener('click', async () => {
+    await clearTaxSession();
+    resetToFreshUpload();
+    document.getElementById('sessionRestoredBanner')?.classList.add('hidden');
+    showToast('Saved session cleared from local storage', 'info', 2500);
+  });
+
+  document.getElementById('btnDismissSessionBanner')?.addEventListener('click', () => {
+    document.getElementById('sessionRestoredBanner')?.classList.add('hidden');
+  });
 }
 
 // ==========================================================================
-// Initialization (Fresh state - no auto-loading!)
+// Session Auto-Restoration Pipeline
 // ==========================================================================
-document.addEventListener('DOMContentLoaded', () => {
+async function checkAndRestoreSavedSession(): Promise<void> {
+  try {
+    const session = await loadTaxSession();
+    if (!session) return;
+
+    // Restore state from persisted session
+    state.currentFile = { name: session.fileName, type: session.fileType };
+    state.rawText = session.rawText;
+    state.structuredData = session.structuredData;
+    state.currentPageNum = 1;
+
+    // If PDF binary buffer exists, restore pdfDoc for Canvas viewer
+    const isPdf = session.fileName.toLowerCase().endsWith('.pdf') || session.fileType === 'application/pdf';
+    if (isPdf && session.fileBuffer && session.fileBuffer.byteLength > 0) {
+      try {
+        const parseResult = await parsePdfDocument(session.fileBuffer, () => {});
+        state.pdfDoc = parseResult.pdfDoc as PdfDocumentLike;
+        state.totalPages = parseResult.pageCount || 1;
+
+        const page = await state.pdfDoc.getPage(1);
+        const canvas = document.getElementById('pdfPageCanvas') as HTMLCanvasElement | null;
+        document.getElementById('pdfNoPreviewMessage')?.classList.add('hidden');
+        if (canvas) {
+          canvas.classList.remove('hidden');
+          await renderPageToCanvas(page, canvas, state.currentZoom);
+        }
+        updatePdfNavControls();
+      } catch (pdfErr) {
+        console.warn('Could not re-initialize PDF canvas from stored buffer:', pdfErr);
+        state.pdfDoc = null;
+      }
+    }
+
+    renderAllViews();
+    updateDocViewDisplay();
+
+    // Show Restored Session Banner with remaining validity
+    const banner = document.getElementById('sessionRestoredBanner');
+    const expiresText = document.getElementById('sessionExpiresText');
+    if (banner) banner.classList.remove('hidden');
+    if (expiresText) {
+      const remainingStr = formatRemainingTime(session.expiresAt);
+      expiresText.textContent = `Valid for another ${remainingStr} (expires 24h from original upload or when replaced).`;
+    }
+
+    if (state.pdfDoc) {
+      await applyFitZoom();
+    }
+
+    showToast('Previous session restored from local storage', 'info', 3000);
+  } catch (err) {
+    console.warn('Error auto-restoring session:', err);
+  }
+}
+
+// ==========================================================================
+// Initialization
+// ==========================================================================
+document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   refreshIcons();
   setupEventListeners();
+  await checkAndRestoreSavedSession();
 });

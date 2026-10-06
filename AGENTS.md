@@ -45,6 +45,7 @@ Components in src/components/ follow Stencil-like custom element conventions.
 - Sensitive Tax Data: Indian tax documents contain PAN, Aadhaar, bank details, and address records. Never add network telemetry, external tracking, or remote API transmission of document contents.
 - No Sensitive Logging: Never log PAN, Aadhaar, full names, addresses, bank details, or passwords to the console, error trackers, or analytics.
 - Password Support: If an encrypted AIS PDF is uploaded, prompt the user via the in-browser modal without storing or transmitting the password. Clear password references after decryption.
+- Local Session Persistence (IndexedDB): Uploaded document binary and parsed results are saved 100% locally in IndexedDB (`tax_ais_local_storage`) with a strict 24-hour time-to-live (TTL). The session is automatically purged after 24 hours, or immediately replaced when the user uploads a new file or clicks 'Clear Session'. Zero data is ever sent to any remote server or persistent cloud storage.
 - CSP & Workers: Keep PDF.js worker local. Avoid eval, new Function, and remote script loading.
 5. Developer JSON Schema Contract
 When extracting or processing AIS / Form 168 data, the JSON output must strictly match the following developer contract:

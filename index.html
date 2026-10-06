@@ -94,6 +94,26 @@
       <!-- Extraction Results Workspace (Hidden on fresh state, revealed after upload) -->
       <section id="resultsWorkspace" class="results-workspace hidden">
         
+        <!-- Restored Session Banner (Shown only when auto-restored from IndexedDB) -->
+        <div id="sessionRestoredBanner" class="session-restored-banner hidden">
+          <div class="session-banner-content">
+            <i data-lucide="clock" class="session-banner-icon"></i>
+            <div>
+              <span class="session-banner-title">Session Restored from Secure Local Storage</span>
+              <span id="sessionExpiresText" class="session-banner-subtitle">Retained for 24 hours unless replaced or cleared.</span>
+            </div>
+          </div>
+          <div class="session-banner-actions">
+            <button id="btnClearSession" class="btn btn-secondary btn-xs" title="Clear saved session data">
+              <i data-lucide="trash-2" class="btn-icon-xs"></i>
+              <span>Clear Session</span>
+            </button>
+            <button id="btnDismissSessionBanner" class="btn btn-ghost btn-xs" title="Dismiss notice">
+              <i data-lucide="x" class="btn-icon-xs"></i>
+            </button>
+          </div>
+        </div>
+
         <!-- Document Meta Header Banner -->
         <div class="document-banner">
           <div class="doc-header-info">
