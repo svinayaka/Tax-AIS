@@ -38,7 +38,7 @@
         "sr_no": 1,
         "information_code": "SFT-017",
         "information_description": "Sale",
-        "information_source": "of shares or units of mutual funds (SFT-017) HDFC SECURITIES LIMITED (AAACH1234D)",
+        "information_source": "of shares or units of mutual funds HDFC SECURITIES LIMITED (AAACH1234D)",
         "amount": 550000,
         "transaction_date": "15/01/2026"
       }
@@ -47,7 +47,7 @@
       {
         "financial_year": "2025-26",
         "major_head": "Income Tax (Other than Companies)",
-        "minor_head": "Advance Tax",
+        "minor_head": "Self Assessment",
         "tax_amount": 20000,
         "total_challan_amount": 20000,
         "bsr_code": "0001234",

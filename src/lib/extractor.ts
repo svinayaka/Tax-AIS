@@ -182,9 +182,10 @@ function createEmptyResult(): StructuredExtractionResult {
 }
 
 const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: number }> = [
-  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 25 },
-  { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'annual tax statement under section 203aa'], score: 25 },
-  { type: 'ais', keywords: ['annual information statement'], score: 5 },
+  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 50 },
+  { type: 'form_26as', keywords: ['annual tax statement under section 203aa', 'annual tax statement'], score: 25 },
+  { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'form no 26as'], score: 10 },
+  { type: 'ais', keywords: ['annual information statement'], score: 25 },
   { type: 'ais', keywords: ['income tax department', 'income-tax department'], score: 4 },
   { type: 'ais', keywords: ['part a', 'part b'], score: 4 },
   { type: 'ais', keywords: ['tax deducted or collected at source', 'tds'], score: 3 },

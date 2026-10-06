@@ -43,7 +43,7 @@
             "sr_no": 1,
             "quarter": "Q4(Jan-Mar)",
             "date_of_payment": "31/03/2026",
-            "amount_paid_credited": 2500000,
+            "amount_paid_credited": 25000,
             "tds_deducted": 2500,
             "tds_deposited": 2500,
             "status": "Active"
@@ -56,7 +56,7 @@
       {
         "financial_year": "2025-26",
         "major_head": "Income Tax (Other than Companies)",
-        "minor_head": "Advance Tax",
+        "minor_head": "Self Assessment",
         "tax_amount": 10000,
         "total_challan_amount": 10000,
         "bsr_code": "0001234",
