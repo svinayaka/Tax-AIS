@@ -1723,6 +1723,62 @@ h1, h2, h3, h4, h5, h6 {
   z-index: var(--ksv-ds-z-modal);
   animation: modalSlideUp var(--ksv-ds-duration-normal) var(--ksv-ds-ease-default);
 
+  &.modal-card--ais-details {
+    max-width: min(var(--ksv-ds-container-xl), 96vw);
+    width: 96vw;
+    height: 92vh;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+
+    .modal-header {
+      flex-shrink: 0;
+    }
+
+    .modal-header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--ksv-ds-space-3);
+    }
+
+    .modal-title-icon {
+      width: var(--ksv-ds-space-6);
+      height: var(--ksv-ds-space-6);
+      color: var(--ksv-ds-text-brand);
+      flex-shrink: 0;
+    }
+
+    .modal-subtitle {
+      font-size: var(--ksv-ds-text-xs);
+      color: var(--ksv-ds-text-secondary);
+      margin-top: var(--ksv-ds-space-1);
+    }
+
+    .modal-body--ais-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: var(--ksv-ds-space-6);
+      display: block;
+      background: var(--ksv-ds-bg-canvas);
+    }
+
+    .modal-footer {
+      flex-shrink: 0;
+    }
+
+    @media (max-width: $breakpoint-md) {
+      width: 100vw;
+      height: 100vh;
+      max-height: 100vh;
+      border-radius: 0;
+      border: none;
+
+      .modal-body--ais-scroll {
+        padding: var(--ksv-ds-space-3);
+      }
+    }
+  }
+
   .modal-header {
     display: flex;
     align-items: center;
@@ -1798,6 +1854,51 @@ h1, h2, h3, h4, h5, h6 {
 @keyframes modalSlideUp {
   from { transform: translateY(var(--ksv-ds-space-4)); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* ==========================================================================
+   Floating Side Action Button (AIS Modal Launcher)
+   ========================================================================== */
+.ais-side-action-btn {
+  position: fixed;
+  right: var(--ksv-ds-space-6);
+  bottom: var(--ksv-ds-space-8);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ksv-ds-space-2);
+  padding: var(--ksv-ds-space-3) var(--ksv-ds-space-5);
+  background: var(--brand-gradient);
+  color: var(--ksv-ds-interactive-primary-text);
+  border: 1px solid var(--ksv-ds-border-focus);
+  border-radius: var(--ksv-ds-radius-full);
+  box-shadow: var(--ksv-ds-shadow-2xl);
+  font-family: var(--ksv-ds-font-sans);
+  font-size: var(--ksv-ds-text-sm);
+  font-weight: var(--ksv-ds-font-weight-bold);
+  cursor: pointer;
+  z-index: var(--ksv-ds-z-elevate);
+  transition: transform var(--ksv-ds-transition-fast), box-shadow var(--ksv-ds-transition-fast);
+
+  &:hover {
+    transform: translateY(calc(-1 * var(--ksv-ds-space-1)));
+    box-shadow: var(--ksv-ds-shadow-xl);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  .side-btn-icon {
+    width: var(--ksv-ds-space-4);
+    height: var(--ksv-ds-space-4);
+  }
+
+  @media (max-width: $breakpoint-md) {
+    right: var(--ksv-ds-space-4);
+    bottom: var(--ksv-ds-space-4);
+    padding: var(--ksv-ds-space-2) var(--ksv-ds-space-4);
+    font-size: var(--ksv-ds-text-xs);
+  }
 }
 
 /* ==========================================================================
@@ -1946,6 +2047,8 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+ais-itr-advisor,
+ais-tax-calculator,
 ais-part-a,
 ais-tax-payment-card,
 .ais-part-section {
@@ -2211,6 +2314,551 @@ ais-deductor-card,
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(calc(var(--ksv-ds-space-32) + var(--ksv-ds-space-12)), 1fr));
     gap: var(--ksv-ds-space-3);
+  }
+}
+
+/* ==========================================================================
+   AIS ITR Advisor Component Styles
+   ========================================================================== */
+.main-itr-advisor-wrapper {
+  margin-bottom: var(--ksv-ds-space-6);
+}
+
+.ais-itr-advisor-section {
+  margin-bottom: var(--ksv-ds-space-6);
+
+  .ais-itr-header-badges {
+    display: flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-2);
+  }
+
+  .ais-itr-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
+    border-radius: var(--ksv-ds-radius-full);
+    font-size: var(--ksv-ds-text-xs);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    letter-spacing: 0.025em;
+
+    &--success {
+      background: var(--ksv-ds-status-success-bg);
+      color: var(--ksv-ds-status-success-text);
+      border: 1px solid var(--ksv-ds-status-success-border);
+    }
+
+    &--info {
+      background: var(--ksv-ds-status-info-bg);
+      color: var(--ksv-ds-status-info-text);
+      border: 1px solid var(--ksv-ds-status-info-border);
+    }
+
+    &--warning {
+      background: var(--ksv-ds-status-warning-bg);
+      color: var(--ksv-ds-status-warning-text);
+      border: 1px solid var(--ksv-ds-status-warning-border);
+    }
+  }
+
+  .ais-itr-headline-card {
+    padding: var(--ksv-ds-space-4);
+    border-radius: var(--ksv-ds-radius-xl);
+    margin-bottom: var(--ksv-ds-space-4);
+
+    &--success {
+      background: var(--ksv-ds-status-success-bg);
+      border: 1px solid var(--ksv-ds-status-success-border);
+    }
+
+    &--info {
+      background: var(--ksv-ds-status-info-bg);
+      border: 1px solid var(--ksv-ds-status-info-border);
+    }
+
+    &--warning {
+      background: var(--ksv-ds-status-warning-bg);
+      border: 1px solid var(--ksv-ds-status-warning-border);
+    }
+  }
+
+  .ais-itr-headline-title {
+    font-size: var(--ksv-ds-text-base);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    margin-bottom: var(--ksv-ds-space-1);
+    color: var(--ksv-ds-text-primary);
+  }
+
+  .ais-itr-headline-desc {
+    font-size: var(--ksv-ds-text-sm);
+    color: var(--ksv-ds-text-secondary);
+    margin: 0;
+    line-height: var(--ksv-ds-leading-relaxed);
+  }
+
+  .ais-itr-disqualifiers-box,
+  .ais-itr-factors-box,
+  .ais-itr-checklist-box {
+    background: var(--ksv-ds-bg-surface-elevated);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-4);
+    margin-bottom: var(--ksv-ds-space-4);
+  }
+
+  .ais-itr-disqualifiers-box {
+    border: 1px solid var(--ksv-ds-status-warning-border);
+  }
+
+  .ais-itr-factors-box {
+    border: 1px solid var(--ksv-ds-status-success-border);
+  }
+
+  .ais-itr-checklist-box {
+    border: 1px solid var(--ksv-ds-border-default);
+    margin-bottom: 0;
+  }
+
+  .ais-itr-box-title {
+    display: flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-2);
+    font-weight: var(--ksv-ds-font-weight-semibold);
+    font-size: var(--ksv-ds-text-sm);
+    margin-bottom: var(--ksv-ds-space-2);
+    color: var(--ksv-ds-text-primary);
+  }
+
+  .ais-itr-box-icon {
+    width: var(--ksv-ds-space-4);
+    height: var(--ksv-ds-space-4);
+    flex-shrink: 0;
+  }
+
+  .ais-itr-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-2);
+  }
+
+  .ais-itr-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ksv-ds-space-2);
+    font-size: var(--ksv-ds-text-sm);
+    color: var(--ksv-ds-text-secondary);
+    line-height: var(--ksv-ds-leading-normal);
+
+    &--disqualifier .ais-itr-item-icon {
+      color: var(--ksv-ds-status-warning-icon);
+    }
+
+    &--eligible .ais-itr-item-icon {
+      color: var(--ksv-ds-status-success-icon);
+    }
+  }
+
+  .ais-itr-item-icon {
+    width: var(--ksv-ds-space-4);
+    height: var(--ksv-ds-space-4);
+    flex-shrink: 0;
+    margin-top: calc(var(--ksv-ds-space-1) * 0.5);
+  }
+
+  .ais-itr-checklist-desc {
+    font-size: var(--ksv-ds-text-xs);
+    color: var(--ksv-ds-text-tertiary);
+    margin: 0 0 var(--ksv-ds-space-3) 0;
+    line-height: var(--ksv-ds-leading-normal);
+  }
+
+  .ais-itr-elevation-callout {
+    display: flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-2);
+    padding: var(--ksv-ds-space-3);
+    background: var(--ksv-ds-status-warning-bg);
+    border: 1px solid var(--ksv-ds-status-warning-border);
+    border-radius: var(--ksv-ds-radius-lg);
+    font-size: var(--ksv-ds-text-sm);
+    color: var(--ksv-ds-status-warning-text);
+    margin-bottom: var(--ksv-ds-space-3);
+  }
+
+  .ais-itr-checklist-items {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-2);
+  }
+
+  .ais-itr-checklist-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ksv-ds-space-3);
+    padding: var(--ksv-ds-space-2) var(--ksv-ds-space-3);
+    border-radius: var(--ksv-ds-radius-md);
+    cursor: pointer;
+    transition: background 0.15s ease;
+
+    &:hover {
+      background: var(--ksv-ds-bg-surface);
+    }
+  }
+
+  .ais-itr-checkbox {
+    margin-top: calc(var(--ksv-ds-space-1) * 0.75);
+    accent-color: var(--ksv-ds-interactive-primary);
+    cursor: pointer;
+  }
+
+  .ais-itr-checklist-content {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--ksv-ds-space-1) * 0.5);
+  }
+
+  .ais-itr-question {
+    font-size: var(--ksv-ds-text-sm);
+    font-weight: var(--ksv-ds-font-weight-medium);
+    color: var(--ksv-ds-text-primary);
+  }
+
+  .ais-itr-impact {
+    font-size: var(--ksv-ds-text-xs);
+    color: var(--ksv-ds-text-tertiary);
+  }
+}
+
+/* ==========================================================================
+   AIS Tax Calculator & Dual-Regime Optimizer Component Styles
+   ========================================================================== */
+.main-tax-calc-wrapper {
+  margin-bottom: var(--ksv-ds-space-6);
+}
+
+.ais-tax-calculator-section {
+  margin-bottom: var(--ksv-ds-space-6);
+
+  .ais-tax-calc-notice-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ksv-ds-space-4);
+    padding: var(--ksv-ds-space-4);
+    background: var(--ksv-ds-status-info-bg);
+    border: 1px solid var(--ksv-ds-status-info-border);
+    border-radius: var(--ksv-ds-radius-xl);
+
+    @media (max-width: $breakpoint-sm) {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .ais-tax-notice-left {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ksv-ds-space-3);
+  }
+
+  .ais-tax-notice-icon {
+    width: var(--ksv-ds-space-5);
+    height: var(--ksv-ds-space-5);
+    color: var(--ksv-ds-status-info-icon);
+    flex-shrink: 0;
+    margin-top: calc(var(--ksv-ds-space-1) * 0.5);
+  }
+
+  .ais-tax-notice-title {
+    font-size: var(--ksv-ds-text-base);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    color: var(--ksv-ds-text-primary);
+    margin: 0 0 var(--ksv-ds-space-1) 0;
+  }
+
+  .ais-tax-notice-desc {
+    font-size: var(--ksv-ds-text-sm);
+    color: var(--ksv-ds-text-secondary);
+    line-height: var(--ksv-ds-leading-relaxed);
+    margin: 0;
+  }
+
+  /* Income Breakdown Ribbon */
+  .ais-tax-ribbon {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--ksv-ds-space-3);
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-border-subtle);
+    border-radius: var(--ksv-ds-radius-lg);
+    padding: var(--ksv-ds-space-3) var(--ksv-ds-space-4);
+    margin-bottom: var(--ksv-ds-space-6);
+
+    @media (max-width: $breakpoint-md) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    @media (max-width: $breakpoint-sm) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ais-tax-ribbon-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-1);
+  }
+
+  .ais-ribbon-label {
+    font-size: var(--ksv-ds-text-xs);
+    color: var(--ksv-ds-text-tertiary);
+    font-weight: var(--ksv-ds-font-weight-medium);
+  }
+
+  .ais-ribbon-val {
+    font-size: var(--ksv-ds-text-base);
+    font-family: var(--ksv-ds-font-mono);
+  }
+
+  /* Dual Regime Grid */
+  .ais-regime-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--ksv-ds-space-4);
+    margin-bottom: var(--ksv-ds-space-6);
+
+    @media (max-width: $breakpoint-md) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .ais-regime-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-border-default);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-5);
+    transition: border-color var(--ksv-ds-transition-fast), box-shadow var(--ksv-ds-transition-fast);
+
+    &--selected {
+      border: 2px solid var(--ksv-ds-interactive-primary);
+      box-shadow: 0 0 0 1px var(--ksv-ds-interactive-primary), var(--ksv-ds-shadow-md);
+    }
+  }
+
+  .ais-regime-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--ksv-ds-space-2);
+    margin-bottom: var(--ksv-ds-space-4);
+    padding-bottom: var(--ksv-ds-space-3);
+    border-bottom: 1px solid var(--ksv-ds-border-subtle);
+  }
+
+  .ais-regime-card-title {
+    font-size: var(--ksv-ds-text-lg);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    color: var(--ksv-ds-text-primary);
+    margin: 0;
+  }
+
+  .ais-savings-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-1);
+    padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
+    background: var(--ksv-ds-status-success-bg);
+    border: 1px solid var(--ksv-ds-status-success-border);
+    color: var(--ksv-ds-status-success-text);
+    border-radius: var(--ksv-ds-radius-full);
+    font-size: var(--ksv-ds-text-xs);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    white-space: nowrap;
+  }
+
+  .ais-regime-table {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-2);
+    margin-bottom: var(--ksv-ds-space-5);
+  }
+
+  .ais-regime-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--ksv-ds-space-1) 0;
+    font-size: var(--ksv-ds-text-sm);
+
+    span:last-child {
+      font-family: var(--ksv-ds-font-mono);
+    }
+
+    &--bold {
+      border-top: 1px dashed var(--ksv-ds-border-subtle);
+      border-bottom: 1px dashed var(--ksv-ds-border-subtle);
+      padding: var(--ksv-ds-space-2) 0;
+      margin: var(--ksv-ds-space-1) 0;
+    }
+
+    &--total {
+      background: var(--ksv-ds-bg-surface);
+      padding: var(--ksv-ds-space-2) var(--ksv-ds-space-3);
+      border-radius: var(--ksv-ds-radius-md);
+      border: 1px solid var(--ksv-ds-border-subtle);
+      margin-top: var(--ksv-ds-space-2);
+      margin-bottom: var(--ksv-ds-space-1);
+    }
+  }
+
+  .ais-regime-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ksv-ds-space-3);
+    padding-top: var(--ksv-ds-space-4);
+    border-top: 1px solid var(--ksv-ds-border-subtle);
+
+    @media (max-width: $breakpoint-sm) {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
+  .ais-net-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-1);
+    padding: var(--ksv-ds-space-1) var(--ksv-ds-space-3);
+    border-radius: var(--ksv-ds-radius-full);
+    font-size: var(--ksv-ds-text-sm);
+    font-weight: var(--ksv-ds-font-weight-bold);
+    font-family: var(--ksv-ds-font-mono);
+
+    &--refund {
+      background: var(--ksv-ds-status-success-bg);
+      color: var(--ksv-ds-status-success-text);
+      border: 1px solid var(--ksv-ds-status-success-border);
+    }
+
+    &--payable {
+      background: var(--ksv-ds-status-warning-bg);
+      color: var(--ksv-ds-status-warning-text);
+      border: 1px solid var(--ksv-ds-status-warning-border);
+    }
+
+    &--nil {
+      background: var(--ksv-ds-bg-surface);
+      color: var(--ksv-ds-text-secondary);
+      border: 1px solid var(--ksv-ds-border-default);
+    }
+  }
+
+  /* Active Selection Box */
+  .ais-selected-summary-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--ksv-ds-space-4);
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-interactive-primary);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-4);
+    margin-bottom: var(--ksv-ds-space-5);
+
+    @media (max-width: $breakpoint-md) {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .ais-selected-summary-left {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-1);
+  }
+
+  .ais-selected-tag {
+    font-size: var(--ksv-ds-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ksv-ds-text-brand);
+    font-weight: var(--ksv-ds-font-weight-semibold);
+  }
+
+  .ais-selected-headline {
+    font-size: var(--ksv-ds-text-base);
+    font-weight: var(--ksv-ds-font-weight-semibold);
+    color: var(--ksv-ds-text-primary);
+  }
+
+  /* Interactive Deductions Editor */
+  .ais-deductions-editor {
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-border-default);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-5);
+    margin-bottom: var(--ksv-ds-space-5);
+  }
+
+  .ais-deductions-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-1);
+    margin-bottom: var(--ksv-ds-space-4);
+    padding-bottom: var(--ksv-ds-space-3);
+    border-bottom: 1px solid var(--ksv-ds-border-subtle);
+  }
+
+  .ais-deductions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--ksv-ds-space-4);
+
+    @media (max-width: $breakpoint-sm) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Tax Tips Box */
+  .ais-tax-tips-box {
+    background: var(--ksv-ds-bg-surface-elevated);
+    border: 1px solid var(--ksv-ds-border-default);
+    border-radius: var(--ksv-ds-radius-xl);
+    padding: var(--ksv-ds-space-4);
+  }
+
+  .ais-tax-tips-title {
+    display: flex;
+    align-items: center;
+    gap: var(--ksv-ds-space-2);
+    font-size: var(--ksv-ds-text-sm);
+    font-weight: var(--ksv-ds-font-weight-semibold);
+    color: var(--ksv-ds-text-primary);
+    margin-bottom: var(--ksv-ds-space-3);
+  }
+
+  .ais-tax-tips-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ksv-ds-space-2);
+  }
+
+  .ais-tax-tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ksv-ds-space-2);
+    font-size: var(--ksv-ds-text-sm);
+    color: var(--ksv-ds-text-secondary);
+    line-height: var(--ksv-ds-leading-normal);
   }
 }
 

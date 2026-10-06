@@ -136,12 +136,22 @@
           </div>
 
           <div class="doc-header-actions">
-            <button id="reuploadBtn" class="btn btn-secondary btn-sm" title="Upload another document">
+            <button type="button" id="btnOpenAisModal" class="btn btn-primary btn-sm" title="Show AIS Details (Part A & Part B)">
+              <i data-lucide="layout-dashboard" class="btn-icon-sm"></i>
+              <span>Show AIS (Part A & B)</span>
+            </button>
+            <button type="button" id="reuploadBtn" class="btn btn-secondary btn-sm" title="Upload another document">
               <i data-lucide="arrow-left" class="btn-icon-sm"></i>
               <span>Upload Another File</span>
             </button>
           </div>
         </div>
+
+        <!-- Floating Side Action Button for AIS Modal -->
+        <button type="button" id="btnFloatingAis" class="ais-side-action-btn" title="Show AIS Summary (Part A & Part B)">
+          <i data-lucide="layout-dashboard" class="side-btn-icon"></i>
+          <span>Show AIS</span>
+        </button>
 
         <!-- KPI Metrics Grid -->
         <div class="kpi-metrics-grid">
@@ -186,101 +196,117 @@
           </div>
         </div>
 
-        <!-- Main Workspace Tabs -->
-        <div class="workspace-tabs-container">
-          <div class="tabs-nav" role="tablist">
-            <button class="tab-btn active" data-tab="aisview" role="tab">
-              <i data-lucide="layout-dashboard" class="tab-icon"></i>
-              <span>AIS Summary (Part A & Part B)</span>
-            </button>
-            <button class="tab-btn" data-tab="pdfview" role="tab" id="pdfViewTabBtn">
-              <i data-lucide="file-search" class="tab-icon"></i>
-              <span>Document Viewer (Interactive & Text)</span>
-            </button>
-          </div>
+        <!-- Statutory ITR Form Classification & Advisory Section (Main Page) -->
+        <div class="main-itr-advisor-wrapper">
+          <ais-itr-advisor id="aisItrAdvisorEl"></ais-itr-advisor>
+        </div>
 
-          <!-- Tab Content Panes -->
-          <div class="tab-panes-wrapper">
+        <!-- Dual-Regime Tax Calculator & Optimizer (ITR-1 Category Only - Main Page) -->
+        <div id="mainTaxCalcWrapper" class="main-tax-calc-wrapper">
+          <ais-tax-calculator id="aisTaxCalcEl"></ais-tax-calculator>
+        </div>
 
-            <!-- TAB 1: AIS Dashboard View -->
-            <div id="pane-aisview" class="tab-pane active">
-              <div id="aisDashboardContainer">
-                <!-- Dynamically rendered AIS Part A, Part B1, Part B2, Part B3, Part B4 -->
+        <!-- Main Workspace Document Viewer Card -->
+        <div class="workspace-viewer-card">
+          <div class="pdf-viewer-card">
+            <div class="pdf-viewer-toolbar">
+              
+              <!-- View Switcher: PDF Canvas vs Text Stream -->
+              <div class="doc-view-toggle">
+                <button type="button" id="viewCanvasBtn" class="btn btn-secondary btn-xs active">
+                  <i data-lucide="file-text" class="btn-icon-xs"></i>
+                  <span>PDF Document</span>
+                </button>
+                <button type="button" id="viewTextBtn" class="btn btn-secondary btn-xs">
+                  <i data-lucide="align-left" class="btn-icon-xs"></i>
+                  <span>Text Stream</span>
+                </button>
+              </div>
+
+              <!-- Open AIS Modal from Viewer Toolbar -->
+              <button type="button" id="btnToolbarOpenAis" class="btn btn-primary btn-xs" title="Open AIS Part A & Part B Modal">
+                <i data-lucide="layout-dashboard" class="btn-icon-xs"></i>
+                <span>Show AIS (Part A & B)</span>
+              </button>
+
+              <!-- PDF Page Navigation -->
+              <div id="pdfNavControls" class="pdf-nav-controls">
+                <button type="button" id="prevPageBtn" class="btn btn-secondary btn-xs" disabled>
+                  <i data-lucide="chevron-left" class="btn-icon-xs"></i>
+                  <span>Prev</span>
+                </button>
+                <span id="pdfPageIndicator" class="page-indicator">Page 1 of 1</span>
+                <button type="button" id="nextPageBtn" class="btn btn-secondary btn-xs" disabled>
+                  <span>Next</span>
+                  <i data-lucide="chevron-right" class="btn-icon-xs"></i>
+                </button>
+              </div>
+
+              <!-- PDF Zoom Controls -->
+              <div id="pdfZoomControls" class="pdf-zoom-controls">
+                <button type="button" id="zoomOutBtn" class="btn btn-secondary btn-xs" title="Zoom Out">
+                  <i data-lucide="zoom-out" class="btn-icon-xs"></i>
+                </button>
+                <span id="zoomLevelText" class="zoom-text">150%</span>
+                <button type="button" id="zoomInBtn" class="btn btn-secondary btn-xs" title="Zoom In">
+                  <i data-lucide="zoom-in" class="btn-icon-xs"></i>
+                </button>
+                <button type="button" id="zoomFitBtn" class="btn btn-secondary btn-xs" title="Fit Width">
+                  <i data-lucide="maximize-2" class="btn-icon-xs"></i>
+                  <span>Fit</span>
+                </button>
               </div>
             </div>
 
-            <!-- TAB 2: Document Viewer Canvas & Text -->
-            <div id="pane-pdfview" class="tab-pane">
-              <div class="pdf-viewer-card">
-                <div class="pdf-viewer-toolbar">
-                  
-                  <!-- View Switcher: PDF Canvas vs Text Stream -->
-                  <div class="doc-view-toggle">
-                    <button id="viewCanvasBtn" class="btn btn-secondary btn-xs active">
-                      <i data-lucide="file-text" class="btn-icon-xs"></i>
-                      <span>PDF Document</span>
-                    </button>
-                    <button id="viewTextBtn" class="btn btn-secondary btn-xs">
-                      <i data-lucide="align-left" class="btn-icon-xs"></i>
-                      <span>Text Stream</span>
-                    </button>
-                  </div>
-
-                  <!-- PDF Page Navigation -->
-                  <div id="pdfNavControls" class="pdf-nav-controls">
-                    <button id="prevPageBtn" class="btn btn-secondary btn-xs" disabled>
-                      <i data-lucide="chevron-left" class="btn-icon-xs"></i>
-                      <span>Prev</span>
-                    </button>
-                    <span id="pdfPageIndicator" class="page-indicator">Page 1 of 1</span>
-                    <button id="nextPageBtn" class="btn btn-secondary btn-xs" disabled>
-                      <span>Next</span>
-                      <i data-lucide="chevron-right" class="btn-icon-xs"></i>
-                    </button>
-                  </div>
-
-                  <!-- PDF Zoom Controls -->
-                  <div id="pdfZoomControls" class="pdf-zoom-controls">
-                    <button id="zoomOutBtn" class="btn btn-secondary btn-xs" title="Zoom Out">
-                      <i data-lucide="zoom-out" class="btn-icon-xs"></i>
-                    </button>
-                    <span id="zoomLevelText" class="zoom-text">150%</span>
-                    <button id="zoomInBtn" class="btn btn-secondary btn-xs" title="Zoom In">
-                      <i data-lucide="zoom-in" class="btn-icon-xs"></i>
-                    </button>
-                    <button id="zoomFitBtn" class="btn btn-secondary btn-xs" title="Fit Width">
-                      <i data-lucide="maximize-2" class="btn-icon-xs"></i>
-                      <span>Fit</span>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- PDF Canvas View -->
-                <div class="pdf-canvas-container" id="pdfCanvasContainer">
-                  <canvas id="pdfPageCanvas" class="pdf-canvas"></canvas>
-                  <div id="pdfNoPreviewMessage" class="no-pdf-placeholder hidden">
-                    <i data-lucide="file-text" class="placeholder-icon"></i>
-                    <p class="font-semibold text-primary">Text / CSV Document Loaded</p>
-                    <p class="text-xs text-secondary mt-1">Click the "Text Stream" button above to view the full document contents.</p>
-                  </div>
-                </div>
-
-                <!-- Text Stream View (Hidden by default) -->
-                <div id="rawTextContainer" class="raw-text-container hidden">
-                  <div class="text-stream-header">
-                    <span class="text-xs font-semibold text-secondary">Extracted Text Stream (Full Document)</span>
-                  </div>
-                  <pre id="rawTextDisplay" class="doc-text-box"></pre>
-                </div>
+            <!-- PDF Canvas View -->
+            <div class="pdf-canvas-container" id="pdfCanvasContainer">
+              <canvas id="pdfPageCanvas" class="pdf-canvas"></canvas>
+              <div id="pdfNoPreviewMessage" class="no-pdf-placeholder hidden">
+                <i data-lucide="file-text" class="placeholder-icon"></i>
+                <p class="font-semibold text-primary">Text / CSV Document Loaded</p>
+                <p class="text-xs text-secondary mt-1">Click the "Text Stream" button above to view the full document contents.</p>
               </div>
             </div>
 
+            <!-- Text Stream View (Hidden by default) -->
+            <div id="rawTextContainer" class="raw-text-container hidden">
+              <div class="text-stream-header">
+                <span class="text-xs font-semibold text-secondary">Extracted Text Stream (Full Document)</span>
+              </div>
+              <pre id="rawTextDisplay" class="doc-text-box"></pre>
+            </div>
           </div>
         </div>
 
       </section>
 
     </main>
+
+    <!-- Modal Window: AIS Part A & Part B Details -->
+    <div id="aisModalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="aisModalTitle">
+      <div class="modal-card modal-card--ais-details">
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <i data-lucide="layout-dashboard" class="modal-title-icon" style="color: var(--ksv-ds-text-brand);"></i>
+            <div>
+              <h3 id="aisModalTitle" class="modal-title">Annual Information Statement (AIS) — Part A & Part B</h3>
+              <p class="modal-subtitle">Extracted Assessee Profile & Tax Ledger Breakdown (Form 168)</p>
+            </div>
+          </div>
+          <button type="button" id="btnCloseAisModal" class="btn-modal-close" aria-label="Close modal">
+            <i data-lucide="x" class="close-icon"></i>
+          </button>
+        </div>
+        <div class="modal-body modal-body--ais-scroll">
+          <div id="aisDashboardContainer">
+            <!-- Dynamically rendered AIS Part A, Part B1, Part B2, Part B3, Part B4 -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btnCloseAisModalFooter" class="btn btn-secondary">Close</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Password Modal for Protected AIS PDFs -->
     <div id="passwordModalBackdrop" class="modal-backdrop hidden">

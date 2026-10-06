@@ -8,7 +8,7 @@
  * - Overwritten whenever a new file is uploaded or explicitly cleared by user.
  */
 
-import type { StructuredExtractionResult } from '../types/ais';
+import type { StructuredExtractionResult, ItrClassificationResult } from '../types/ais';
 
 export interface StoredSession {
   id: string; // Fixed key 'active_session'
@@ -17,6 +17,7 @@ export interface StoredSession {
   fileBuffer: ArrayBuffer;
   rawText: string;
   structuredData: StructuredExtractionResult;
+  itrRecommendation?: ItrClassificationResult;
   savedAt: number; // Unix epoch ms
   expiresAt: number; // Unix epoch ms (savedAt + 24 hours)
 }
@@ -55,11 +56,13 @@ export async function saveTaxSession(
   file: File | { name: string; type?: string },
   fileBuffer: ArrayBuffer,
   rawText: string,
-  structuredData: StructuredExtractionResult
+  structuredData: StructuredExtractionResult,
+  itrRecommendation?: ItrClassificationResult
 ): Promise<void> {
   try {
     const db = await openDatabase();
     const now = Date.now();
+    const resolvedItr = itrRecommendation ?? structuredData.itrRecommendation;
     const session: StoredSession = {
       id: SESSION_KEY,
       fileName: file.name || 'document',
@@ -67,6 +70,7 @@ export async function saveTaxSession(
       fileBuffer,
       rawText,
       structuredData,
+      itrRecommendation: resolvedItr,
       savedAt: now,
       expiresAt: now + SESSION_TTL_MS
     };

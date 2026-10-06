@@ -9,13 +9,17 @@ Code Quality: SonarQube (eslint-plugin-sonarjs), Stylelint, Husky, lint-staged
 Tax-AIS is a specialized, privacy-first, 100% in-browser extraction engine and visual dashboard for Indian Income Tax Annual Information Statement (AIS / Form 168) and Form 26AS documents.
 Current scope: AIS / Form 168 extraction is fully supported. Form 26AS support is partial/planned; do not assume Form 26AS fields exist unless the extractor and schema explicitly include them.
 Key Architecture Modules (TypeScript)
-- src/types/ais.ts: Strict TypeScript interfaces and developer schema contract (PartAGeneralInfo, PartB1TdsTcsTransaction, PartB3TaxPayment, AisDeveloperSchema, StructuredExtractionResult).
+- src/types/ais.ts: Strict TypeScript interfaces and developer schema contract (PartAGeneralInfo, PartB1TdsTcsTransaction, PartB3TaxPayment, AisDeveloperSchema, StructuredExtractionResult, ItrClassificationResult).
 - src/lib/pdf-parser.ts: Binary PDF reader powered by Mozilla PDF.js. Handles spatial layout reconstruction, line grouping with tolerance, and encrypted PDF password callbacks (PAN + DDMMYYYY) with HiDPI Retina canvas scaling.
 - src/lib/extractor.ts: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund).
+- src/lib/itr-classifier.ts: Statutory ITR Form Classification Engine (ITR-1 Sahaj vs ITR-2 / ITR-3 / ITR-4) evaluating CBDT rules against AIS transactions.
+- src/lib/extractor-client.ts: Web Worker orchestrator and resilient main-thread fallback manager.
+- src/workers/extractor.worker.ts: Dedicated background Web Worker executing pure token extraction and ITR classification off the main UI thread.
+- src/workers/ROUTER_AGENT.md: System directive and statutory routing rules matrix for ITR-1 vs ITR-2 classification.
 - src/lib/exporter.ts: Multi-format exporter producing strict JSON Schema, tax filing CSV, and Markdown reports.
-- src/components/: Web Component suite (<ais-part-a>, <ais-deductor-card>, <ais-tax-payment-card>, <ais-kpi-card>).
+- src/components/: Web Component suite (<ais-part-a>, <ais-itr-advisor>, <ais-deductor-card>, <ais-tax-payment-card>, <ais-kpi-card>).
 - src/style.scss: Design tokens and styling built entirely on top of @svinayaka/siddi-design-system.
-- src/main.ts: Application orchestrator, multi-format ingestion (PDF, TXT, CSV, JSON), theme manager, and event router.
+- src/main.ts: Application orchestrator, multi-format ingestion (PDF, TXT, CSV, JSON), AIS Details Modal manager (Part A & Part B), theme manager, and event router.
 2. Strict Design System Guidelines (@svinayaka/siddi-design-system)
 All visual styling, layouts, components, and templates in this workspace MUST adhere to @svinayaka/siddi-design-system tokens.
 Token Rules
@@ -32,14 +36,19 @@ Token Rules
    - Radii: var(--ksv-ds-radius-sm), var(--ksv-ds-radius-md), var(--ksv-ds-radius-lg), var(--ksv-ds-radius-xl), var(--ksv-ds-radius-2xl), var(--ksv-ds-radius-full)
    - Typography & Spacing: var(--ksv-ds-font-sans), var(--ksv-ds-font-mono), var(--ksv-ds-space-1) through var(--ksv-ds-space-12)
 3. Theme Switching: Synchronize both data-theme and data-ksv-ds-theme attributes on document.documentElement ("dark" or "light").
-3. Web Component Standards
+3. Web Component & Modal Presentation Standards
 Components in src/components/ follow Stencil-like custom element conventions.
-1. Naming: Custom Elements use the ais-* prefix (e.g. <ais-part-a>, <ais-deductor-card>, <ais-tax-payment-card>, <ais-kpi-card>).
+1. Naming: Custom Elements use the ais-* prefix (e.g. <ais-part-a>, <ais-itr-advisor>, <ais-deductor-card>, <ais-tax-payment-card>, <ais-kpi-card>).
 2. Properties & Attributes:
    - Primitive configuration (such as tax-year, title, icon) is supported via observed attributes.
    - Complex structured data (objects/arrays) is passed via reactive property setters/getters (element.data = ..., element.deductor = ..., element.payments = ...).
 3. DOM Encapsulation: Use semantic HTML with @svinayaka/siddi-design-system classes and tokens.
 4. Registration: Ensure all components register through customElements.define() with guard check if (!customElements.get('tag-name')) and export through src/components/index.ts.
+5. AIS Details Modal Window & Main Page Separation: The statutory ITR decision and interactive criteria checklist (<ais-itr-advisor>) are presented prominently on the main results page directly above the document viewer. In contrast, Part A (Assessee Profile) and Part B (B1 Deductors, B2 SFT, B3 Challans, B4 Demand & Refund) — which mirror the source document contents — are housed exclusively inside an accessible, scrollable modal window (<div id="aisModalBackdrop"> -> .modal-card--ais-details). The modal is launched via 3 entrypoints: the floating side action button (#btnFloatingAis), the document header button (#btnOpenAisModal), and the viewer toolbar button (#btnToolbarOpenAis). Dismissal supports close buttons, backdrop click-outside, and the Escape key.
+6. Two-Tier Classification Pipeline: Tier 1 (automated rule-based evaluation) executes inside the Web Worker (extractor.worker.ts) using AIS transaction signals. Tier 2 (interactive external checklist with checkboxes) renders inside <ais-itr-advisor> on the main page for non-AIS statutory triggers (total income > ₹50L, multiple houses, company directorship, unlisted shares) to dynamically elevate to ITR-2.
+7. Downstream ITR-1 Tax Calculation & Dual-Regime Comparison (AY 2026-27): When the taxpayer falls under ITR-1 (or provisional ITR-1), the application computes tax payable or refund for both New (Section 115BAC, ₹75k std deduction, revised slabs) and Old Regimes (₹50k std deduction, Chapter VI-A deductions), highlighting the optimal regime, estimated savings, and actionable tax optimization tips. When classified under ITR-2 or higher, this calculation is explicitly bypassed because complex capital gains, foreign assets, or business schedules require full ITR-2/3 computation.
+   - Statutory Chapter VI-A Invalidation under New Tax Regime: Under Section 115BAC, deductions under Chapter VI-A (Section 80C, 80D, 80CCD(1B), 80TTA, Section 24b) are legally disallowed by CBDT.
+   - Regime State Machine & Deduction Nullification: In `<ais-tax-calculator>`, the Chapter VI-A deduction customization editor is exclusively enabled when the Old Tax Regime is chosen. Whenever the user selects or switches to the New Tax Regime, the deduction customization panel is strictly hidden/collapsed, and all previously entered deduction values are automatically nullified to zero (`{ ...DEFAULT_DEDUCTIONS }`) to prevent erroneous assumptions or phantom deduction states.
 4. Privacy & Client-Side Execution Guarantee
 - Zero Server Transmission: All PDF parsing, regex extraction, spatial reconstruction, and data formatting MUST remain 100% in-browser.
 - Sensitive Tax Data: Indian tax documents contain PAN, Aadhaar, bank details, and address records. Never add network telemetry, external tracking, or remote API transmission of document contents.

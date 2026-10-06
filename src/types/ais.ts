@@ -140,6 +140,7 @@ export interface StructuredExtractionResult {
   sections: DocumentSection[];
   customFieldResults: Record<string, string>;
   aisJson: AisDeveloperSchema | null;
+  itrRecommendation?: ItrClassificationResult;
 }
 
 export interface PdfParseProgress {
@@ -189,4 +190,41 @@ export interface VerifiedAisContract {
     totalRefundAmount: number;
   };
 }
+
+export type ItrFormType = 'ITR-1' | 'ITR-2' | 'ITR-3' | 'ITR-4';
+
+export interface ItrChecklistItem {
+  id: string;
+  question: string;
+  impactIfYes: string;
+}
+
+export interface ItrDetectedFactors {
+  hasCapitalGains: boolean;
+  hasPropertyTransactions: boolean;
+  hasForeignRemittance: boolean;
+  hasLotteryOrGambling: boolean;
+  hasCryptoVda: boolean;
+  hasBusinessOrProfession: boolean;
+  hasSalaryIncome: boolean;
+  hasInterestIncome: boolean;
+  hasDividendIncome: boolean;
+  hasHighCashWithdrawal: boolean;
+}
+
+export interface ItrClassificationResult {
+  targetWorkspace: 'ITR-1' | 'ITR-2';
+  isBarredFromItr1: boolean;
+  routingTriggers: string[];
+  calculatedTotalIncome: number;
+  recommendedForm: ItrFormType;
+  confidence: 'high' | 'provisional';
+  headline: string;
+  summaryReason: string;
+  disqualifiersFromItr1: string[];
+  eligibleFactors: string[];
+  checklist: ItrChecklistItem[];
+  detectedFactors: ItrDetectedFactors;
+}
+
 

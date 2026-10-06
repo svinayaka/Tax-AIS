@@ -2,7 +2,8 @@ import { createIcons, icons } from 'lucide';
 import confetti from 'canvas-confetti';
 
 import { parsePdfDocument, renderPageToCanvas, type PdfDocumentLike } from './lib/pdf-parser';
-import { extractStructuredData } from './lib/extractor';
+import { extractAndClassifyAis } from './lib/extractor-client';
+import { classifyItr } from './lib/itr-classifier';
 import { escapeHtml, formatInr } from './lib/dom-utils';
 
 // Import Siddi-compliant Stencil / Web Components
@@ -16,7 +17,9 @@ import {
 import { AisPartA } from './components/ais-part-a';
 import { AisDeductorCard } from './components/ais-deductor-card';
 import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
-import type { AisDeveloperSchema, StructuredExtractionResult } from './types/ais';
+import { AisItrAdvisor } from './components/ais-itr-advisor';
+import { AisTaxCalculator } from './components/ais-tax-calculator';
+import type { AisDeveloperSchema, StructuredExtractionResult, ItrClassificationResult } from './types/ais';
 import { saveTaxSession, loadTaxSession, clearTaxSession, formatRemainingTime } from './lib/storage';
 
 // ==========================================================================
@@ -31,7 +34,7 @@ interface AppState {
   totalPages: number;
   currentZoom: number;
   structuredData: StructuredExtractionResult | null;
-  activeTab: string;
+  itrRecommendation: ItrClassificationResult | null;
   docViewMode: 'canvas' | 'text';
 }
 
@@ -44,7 +47,7 @@ const state: AppState = {
   totalPages: 1,
   currentZoom: 1.5, // Default 150% for high readability
   structuredData: null,
-  activeTab: 'aisview',
+  itrRecommendation: null,
   docViewMode: 'canvas',
 };
 
@@ -141,6 +144,22 @@ function closePasswordModal(cancelled = false): void {
   }
 }
 
+function openAisModal(): void {
+  const backdrop = document.getElementById('aisModalBackdrop');
+  if (backdrop) {
+    backdrop.classList.remove('hidden');
+    refreshIcons();
+    document.getElementById('btnCloseAisModal')?.focus();
+  }
+}
+
+function closeAisModal(): void {
+  const backdrop = document.getElementById('aisModalBackdrop');
+  if (backdrop) {
+    backdrop.classList.add('hidden');
+  }
+}
+
 // ==========================================================================
 // File Ingestion & Extraction Orchestrator (PDF, TXT, CSV, JSON)
 // ==========================================================================
@@ -172,7 +191,10 @@ async function processPdfFile(
   state.totalPages = parseResult.pageCount || 1;
   state.currentPageNum = 1;
 
-  state.structuredData = extractStructuredData(parseResult.rawText);
+  if (title) title.textContent = 'Extracting JSON & Classifying ITR Form...';
+  const extractionResult = await extractAndClassifyAis(parseResult.rawText);
+  state.structuredData = extractionResult.structuredData;
+  state.itrRecommendation = extractionResult.itrRecommendation;
 
   // Render First Page to Canvas
   if (state.pdfDoc) {
@@ -204,7 +226,7 @@ async function processJsonFile(
   try {
     const parsedJson = JSON.parse(textContent);
     if (parsedJson.part_a_general_info || parsedJson.part_b1_tds_tcs_transactions) {
-      state.structuredData = {
+      const structuredData: StructuredExtractionResult = {
         documentClassification: {
           type: 'ais',
           confidence: 'high',
@@ -234,13 +256,19 @@ async function processJsonFile(
         customFieldResults: {},
         aisJson: parsedJson
       };
+      const itrRecommendation = classifyItr(structuredData);
+      structuredData.itrRecommendation = itrRecommendation;
+      state.structuredData = structuredData;
+      state.itrRecommendation = itrRecommendation;
       return;
     }
   } catch {
     // Fall back to standard extraction
   }
 
-  state.structuredData = extractStructuredData(textContent);
+  const extractionResult = await extractAndClassifyAis(textContent);
+  state.structuredData = extractionResult.structuredData;
+  state.itrRecommendation = extractionResult.itrRecommendation;
 }
 
 async function processTextOrCsvFile(
@@ -257,7 +285,9 @@ async function processTextOrCsvFile(
   state.totalPages = 1;
   state.currentPageNum = 1;
 
-  state.structuredData = extractStructuredData(textContent);
+  const extractionResult = await extractAndClassifyAis(textContent);
+  state.structuredData = extractionResult.structuredData;
+  state.itrRecommendation = extractionResult.itrRecommendation;
 }
 
 function updateDocViewDisplay(): void {
@@ -317,7 +347,7 @@ async function handleFileUpload(file: File): Promise<void> {
     if (state.structuredData) {
       try {
         const fileBuffer = await file.arrayBuffer();
-        await saveTaxSession(file, fileBuffer, state.rawText, state.structuredData);
+        await saveTaxSession(file, fileBuffer, state.rawText, state.structuredData, state.itrRecommendation ?? undefined);
         // Hide session restored banner on new upload since this is a live fresh upload
         document.getElementById('sessionRestoredBanner')?.classList.add('hidden');
       } catch (saveErr) {
@@ -344,10 +374,12 @@ async function handleFileUpload(file: File): Promise<void> {
 
 
 function resetToFreshUpload(): void {
+  closeAisModal();
   state.currentFile = null;
   state.rawText = '';
   state.pdfDoc = null;
   state.structuredData = null;
+  state.itrRecommendation = null;
   state.currentPageNum = 1;
 
   // Show upload section, hide results
@@ -356,6 +388,12 @@ function resetToFreshUpload(): void {
 
   const fileInput = document.getElementById('fileInput') as HTMLInputElement | null;
   if (fileInput) fileInput.value = '';
+
+  const taxCalcEl = document.getElementById('aisTaxCalcEl') as AisTaxCalculator | null;
+  if (taxCalcEl) {
+    taxCalcEl.data = null;
+    taxCalcEl.isEligibleForItr1 = false;
+  }
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
   showToast('Ready for new upload', 'info', 2000);
@@ -417,7 +455,20 @@ function renderAllViews(): void {
   if (kpiCredited) kpiCredited.textContent = formatInr(totalCredited);
   if (kpiPaid) kpiPaid.textContent = formatInr(totalTaxPaid);
 
-  // 3. Render AIS Dashboard (Part A & Part B)
+  // 3. Populate Statutory ITR Form Advisor on the Main Page
+  const itrAdvisorEl = document.getElementById('aisItrAdvisorEl') as AisItrAdvisor | null;
+  if (itrAdvisorEl && state.itrRecommendation) {
+    itrAdvisorEl.data = state.itrRecommendation;
+  }
+
+  // 3b. Populate ITR-1 Tax Calculator & Dual-Regime Optimizer on the Main Page
+  const taxCalcEl = document.getElementById('aisTaxCalcEl') as AisTaxCalculator | null;
+  if (taxCalcEl) {
+    taxCalcEl.isEligibleForItr1 = state.itrRecommendation?.recommendedForm === 'ITR-1';
+    taxCalcEl.data = ais;
+  }
+
+  // 4. Render AIS Modal Dashboard (Part A & Part B Only)
   renderAisDashboard(ais);
 
   // 4. Populate Document Text Stream
@@ -585,7 +636,6 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
 
   container.innerHTML = html;
 
-  // Set reactive properties on custom elements
   const partAComp = container.querySelector('ais-part-a') as AisPartA | null;
   if (partAComp) partAComp.data = partA;
 
@@ -714,19 +764,36 @@ function setupEventListeners(): void {
     resetToFreshUpload();
   });
 
-  // 4. Workspace Tabs
-  document.querySelectorAll<HTMLElement>('.tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.dataset.tab || 'aisview';
-      state.activeTab = tabId;
+  // 3a. Dynamic ITR Form Elevation Listener (Tier 2 interactive checklist in <ais-itr-advisor>)
+  document.getElementById('aisItrAdvisorEl')?.addEventListener('itr-form-changed', (e: Event) => {
+    const customEvt = e as CustomEvent<{ effectiveForm: string; isEligibleForItr1: boolean }>;
+    const taxCalcEl = document.getElementById('aisTaxCalcEl') as AisTaxCalculator | null;
+    if (taxCalcEl) {
+      taxCalcEl.isEligibleForItr1 = customEvt.detail.isEligibleForItr1;
+      refreshIcons();
+    }
+  });
 
-      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
+  // 4. AIS Details Modal Controls (Part A & Part B)
+  document.getElementById('btnOpenAisModal')?.addEventListener('click', openAisModal);
+  document.getElementById('btnFloatingAis')?.addEventListener('click', openAisModal);
+  document.getElementById('btnToolbarOpenAis')?.addEventListener('click', openAisModal);
+  document.getElementById('btnCloseAisModal')?.addEventListener('click', closeAisModal);
+  document.getElementById('btnCloseAisModalFooter')?.addEventListener('click', closeAisModal);
 
-      btn.classList.add('active');
-      const targetPane = document.getElementById(`pane-${tabId}`);
-      if (targetPane) targetPane.classList.add('active');
-    });
+  document.getElementById('aisModalBackdrop')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('aisModalBackdrop')) {
+      closeAisModal();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('aisModalBackdrop');
+      if (modal && !modal.classList.contains('hidden')) {
+        closeAisModal();
+      }
+    }
   });
 
   // 5. Document View Switcher (PDF Canvas vs Raw Text)
@@ -818,6 +885,10 @@ async function checkAndRestoreSavedSession(): Promise<void> {
     state.currentFile = { name: session.fileName, type: session.fileType };
     state.rawText = session.rawText;
     state.structuredData = session.structuredData;
+    state.itrRecommendation =
+      session.itrRecommendation ??
+      session.structuredData.itrRecommendation ??
+      (session.structuredData ? classifyItr(session.structuredData) : null);
     state.currentPageNum = 1;
 
     // If PDF binary buffer exists, restore pdfDoc for Canvas viewer
