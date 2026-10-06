@@ -74,10 +74,10 @@ $breakpoint-2xl: 1536px; // var(--ksv-ds-breakpoint-2xl)
   --ksv-ds-bg-glass-card: #141c2b;
   --ksv-ds-bg-glass: rgba(20, 28, 43, 0.95);
 
-  /* High-clarity, eye-friendly borders (distinct separation across OLED & LCD displays) */
-  --ksv-ds-border-subtle: rgba(148, 163, 184, 0.32);
-  --ksv-ds-border-default: rgba(148, 163, 184, 0.52);
-  --ksv-ds-border-strong: rgba(203, 213, 225, 0.72);
+  /* High-clarity, solid eye-friendly borders (distinct separation across OLED & LCD displays) */
+  --ksv-ds-border-subtle: #334155;
+  --ksv-ds-border-default: #475569;
+  --ksv-ds-border-strong: #64748b;
   --ksv-ds-border-focus: #818cf8;
 
   /* Enhanced typography contrast for effortless reading without eye fatigue */
@@ -86,21 +86,21 @@ $breakpoint-2xl: 1536px; // var(--ksv-ds-breakpoint-2xl)
   --ksv-ds-text-tertiary: #94a3b8;
   --ksv-ds-text-brand: #818cf8;
 
-  /* Vibrant, legible status indicators with crisp boundaries (no murky low-contrast colors) */
-  --ksv-ds-status-info-bg: rgba(14, 165, 233, 0.22);
-  --ksv-ds-status-info-border: rgba(56, 189, 248, 0.6);
+  /* Vibrant, legible status indicators with crisp solid boundaries */
+  --ksv-ds-status-info-bg: rgba(14, 165, 233, 0.18);
+  --ksv-ds-status-info-border: #0ea5e9;
   --ksv-ds-status-info-text: #38bdf8;
   --ksv-ds-status-info-icon: #38bdf8;
-  --ksv-ds-status-success-bg: rgba(16, 185, 129, 0.22);
-  --ksv-ds-status-success-border: rgba(52, 211, 153, 0.6);
+  --ksv-ds-status-success-bg: rgba(16, 185, 129, 0.18);
+  --ksv-ds-status-success-border: #10b981;
   --ksv-ds-status-success-text: #34d399;
   --ksv-ds-status-success-icon: #34d399;
-  --ksv-ds-status-warning-bg: rgba(245, 158, 11, 0.22);
-  --ksv-ds-status-warning-border: rgba(251, 191, 36, 0.6);
+  --ksv-ds-status-warning-bg: rgba(245, 158, 11, 0.18);
+  --ksv-ds-status-warning-border: #f59e0b;
   --ksv-ds-status-warning-text: #fbbf24;
   --ksv-ds-status-warning-icon: #fbbf24;
-  --ksv-ds-status-danger-bg: rgba(244, 63, 94, 0.22);
-  --ksv-ds-status-danger-border: rgba(251, 113, 133, 0.6);
+  --ksv-ds-status-danger-bg: rgba(244, 63, 94, 0.18);
+  --ksv-ds-status-danger-border: #f43f5e;
   --ksv-ds-status-danger-text: #fb7185;
   --ksv-ds-status-danger-icon: #fb7185;
 
@@ -600,7 +600,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: space-between;
   gap: var(--ksv-ds-space-4);
-  box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-status-info-border);
+  box-shadow: var(--ksv-ds-shadow-sm);
   animation: fadeIn var(--ksv-ds-duration-normal) var(--ksv-ds-ease-default);
 
   @media (max-width: $breakpoint-sm) {
@@ -656,11 +656,11 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   gap: var(--ksv-ds-space-5);
   margin-bottom: var(--ksv-ds-space-6);
-  box-shadow: var(--ksv-ds-shadow-md), 0 0 0 1px var(--ksv-ds-border-subtle);
+  box-shadow: var(--ksv-ds-shadow-md);
 
   @media (max-width: $breakpoint-sm) {
     padding: var(--ksv-ds-space-5) var(--ksv-ds-space-4);
-    box-shadow: var(--ksv-ds-shadow-md), 0 0 0 1px var(--ksv-ds-border-default);
+    border-color: var(--ksv-ds-border-strong);
   }
 
   .doc-header-info {
@@ -829,23 +829,23 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: var(--ksv-ds-space-4);
-  box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-subtle);
+  box-shadow: var(--ksv-ds-shadow-sm);
   transition: transform var(--ksv-ds-transition-fast), border-color var(--ksv-ds-transition-fast);
 
   @media (max-width: $breakpoint-sm) {
-    box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-default);
+    border-color: var(--ksv-ds-border-strong);
   }
 
   &:hover {
     transform: translateY(calc(var(--ksv-ds-radius-xs) * -1));
-    border-color: var(--ksv-ds-border-strong);
+    border-color: var(--ksv-ds-border-focus);
   }
 
   .kpi-icon-wrap {
     width: var(--ksv-ds-space-12);
     height: var(--ksv-ds-space-12);
     border-radius: var(--ksv-ds-radius-md);
-    border: 1px solid var(--ksv-ds-border-subtle);
+    border: 1px solid var(--ksv-ds-border-default);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -884,7 +884,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-3xl);
   overflow: hidden;
-  box-shadow: var(--ksv-ds-shadow-md), 0 0 0 1px var(--ksv-ds-border-subtle);
+  box-shadow: var(--ksv-ds-shadow-md);
 
   .tabs-nav {
     display: flex;
@@ -1055,7 +1055,7 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-2xl);
     padding: var(--ksv-ds-space-5) var(--ksv-ds-space-6);
-    box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-subtle);
+    box-shadow: var(--ksv-ds-shadow-sm);
   }
 
   .category-block-header {
@@ -1169,7 +1169,7 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--ksv-ds-border-default);
     border-radius: var(--ksv-ds-radius-2xl);
     overflow: hidden;
-    box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-subtle);
+    box-shadow: var(--ksv-ds-shadow-sm);
   }
 
   .table-header-bar {
@@ -1885,7 +1885,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--ksv-ds-border-default);
   border-radius: var(--ksv-ds-radius-2xl);
   padding: var(--ksv-ds-space-6);
-  box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-subtle);
+  box-shadow: var(--ksv-ds-shadow-sm);
 
   .ais-part-header {
     display: flex;
@@ -1969,7 +1969,7 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: var(--ksv-ds-radius-xl);
   overflow: hidden;
   margin-bottom: var(--ksv-ds-space-4);
-  box-shadow: var(--ksv-ds-shadow-sm), 0 0 0 1px var(--ksv-ds-border-subtle);
+  box-shadow: var(--ksv-ds-shadow-sm);
 
   .ais-deductor-header {
     padding: var(--ksv-ds-space-4) var(--ksv-ds-space-5);
