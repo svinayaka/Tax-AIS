@@ -319,7 +319,7 @@ A deterministic, rule-based classifier evaluating extracted AIS signals and user
    - Contractual payments (Section 194C) or professional/technical fees (Section 194J) indicate business or freelance income, excluding both ITR-1 and ITR-2.
 4. **Two-Tier Guidance Architecture:**
    - **Tier 1 (In-Worker Deterministic Evaluation):** Automated inspection of all AIS tokens and transaction codes executed off-thread.
-   - **Tier 2 (Interactive User Verification on Main Page):** The `<ais-itr-advisor>` component renders live checkboxes for non-AIS statutory facts (income > ₹50L, > 2 houses, directorship, unlisted shares) that dynamically elevate filing recommendations to ITR-2 right on the main page.
+   - **Tier 2 (Interactive User Verification on Main Page):** The `<ais-itr-advisor>` component renders live checkboxes for non-AIS statutory facts (income > ₹50L, > 2 houses, directorship, unlisted shares) that dynamically elevate filing recommendations to ITR-2 right on the main page. The checklist is exclusively presented when the taxpayer is provisionally ITR-1; when AIS already establishes ITR-2 from transaction signals, the external checklist is strictly omitted.
 
 ### 10.10 ITR-1 Tax Calculation & Dual-Regime Comparison Engine (AY 2026-27)
 A dedicated local tax computation layer that evaluates income tax liability, tax refund vs payable, and optimal regime savings:

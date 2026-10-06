@@ -1,3 +1,4 @@
+import { createIcons, icons } from 'lucide';
 import type { ItrClassificationResult } from '../types/ais';
 import { escapeHtml, formatInr } from '../lib/dom-utils';
 
@@ -147,40 +148,42 @@ export class AisItrAdvisor extends HTMLElement {
         </div>
       ` : ''}
 
-      <!-- Interactive Verification Checklist -->
-      <div class="ais-itr-checklist-box">
-        <div class="ais-itr-box-title">
-          <i data-lucide="list-checks" class="ais-itr-box-icon" style="color:var(--ksv-ds-text-brand);"></i>
-          <span>External Statutory Checklist (Parameters Outside AIS)</span>
-        </div>
-        <p class="ais-itr-checklist-desc">
-          AIS contains transactions reported by banks and deductors. Check any condition below that applies to your filing year:
-        </p>
+      <!-- Interactive Verification Checklist (Exclusively rendered when provisionally ITR-1) -->
+      ${d.recommendedForm === 'ITR-1' && checklist.length > 0 ? `
+        <div class="ais-itr-checklist-box">
+          <div class="ais-itr-box-title">
+            <i data-lucide="list-checks" class="ais-itr-box-icon" style="color:var(--ksv-ds-text-brand);"></i>
+            <span>External Statutory Checklist (Parameters Outside AIS)</span>
+          </div>
+          <p class="ais-itr-checklist-desc">
+            AIS contains transactions reported by banks and deductors. Check any condition below that applies to your filing year:
+          </p>
 
-        <div id="itrChecklistCallout" class="ais-itr-elevation-callout hidden">
-          <i data-lucide="alert-circle" class="ais-itr-box-icon" style="color:var(--ksv-ds-status-warning-icon);"></i>
-          <span>
-            <strong>ITR-2 Required:</strong> One or more checked criteria exceed ITR-1 statutory limits. You must file Form ITR-2 (or ITR-3).
-          </span>
-        </div>
+          <div id="itrChecklistCallout" class="ais-itr-elevation-callout hidden">
+            <i data-lucide="alert-circle" class="ais-itr-box-icon" style="color:var(--ksv-ds-status-warning-icon);"></i>
+            <span>
+              <strong>ITR-2 Required:</strong> One or more checked criteria exceed ITR-1 statutory limits. You must file Form ITR-2 (or ITR-3).
+            </span>
+          </div>
 
-        <div class="ais-itr-checklist-items">
-          ${checklist.map(item => `
-            <label class="ais-itr-checklist-row" for="chk_${escapeHtml(item.id)}">
-              <input
-                type="checkbox"
-                id="chk_${escapeHtml(item.id)}"
-                data-checklist-id="${escapeHtml(item.id)}"
-                class="ais-itr-checkbox"
-              />
-              <div class="ais-itr-checklist-content">
-                <div class="ais-itr-question">${escapeHtml(item.question)}</div>
-                <div class="ais-itr-impact">${escapeHtml(item.impactIfYes)}</div>
-              </div>
-            </label>
-          `).join('')}
+          <div class="ais-itr-checklist-items">
+            ${checklist.map(item => `
+              <label class="ais-itr-checklist-row" for="chk_${escapeHtml(item.id)}">
+                <input
+                  type="checkbox"
+                  id="chk_${escapeHtml(item.id)}"
+                  data-checklist-id="${escapeHtml(item.id)}"
+                  class="ais-itr-checkbox"
+                />
+                <div class="ais-itr-checklist-content">
+                  <div class="ais-itr-question">${escapeHtml(item.question)}</div>
+                  <div class="ais-itr-impact">${escapeHtml(item.impactIfYes)}</div>
+                </div>
+              </label>
+            `).join('')}
+          </div>
         </div>
-      </div>
+      ` : ''}
     `;
 
     // Bind checkbox event listeners
@@ -191,6 +194,8 @@ export class AisItrAdvisor extends HTMLElement {
         this.toggleChecklistItem(id, cb.checked);
       });
     });
+
+    createIcons({ icons, root: this });
   }
 }
 

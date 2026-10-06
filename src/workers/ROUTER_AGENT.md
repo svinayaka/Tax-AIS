@@ -204,8 +204,11 @@ If reliable total income is available and exceeds `5,000,000`, block ITR-1. Othe
 
 ## 9. External Statutory Checklist
 
-AIS cannot establish every ITR-1 eligibility fact.
-For AY 2026-27 include at least:
+AIS cannot establish every ITR-1 eligibility fact. Therefore, the External Statutory Checklist is **exclusively presented when the assessee is provisionally eligible for ITR-1** to evaluate non-AIS elevation triggers.
+
+**Strict Non-Applicability for ITR-2 Returns:** When AIS data already establishes Form ITR-2 (or higher) due to verified capital gains, high-value securities transactions, foreign remittances, or lottery receipts, the External Statutory Checklist is **strictly omitted/hidden**. External checkboxes cannot downgrade or alter an already established ITR-2 statutory filing requirement.
+
+For AY 2026-27 (when evaluating ITR-1 candidates), the checklist evaluates:
 1. Are you RNOR or non-resident for the relevant year?
 2. Do you have income from more than two house properties? *(Do NOT ask "more than one house property")*
 3. Were you a director in a company during the previous year?
@@ -225,16 +228,16 @@ For AY 2026-27 include at least:
 
 ## 10. Interactive Checklist Behavior
 
-Unchecked checkboxes mean only that the user has not declared the condition.
-They do not independently prove statutory eligibility.
-
-If no AIS-based blocker is detected and no checklist blocker is selected:
-**ITR-1 (Sahaj) Provisionally Recommended**
-
-Supporting copy:
-> *"No ITR-1 exclusion was detected from the available AIS data or your current checklist responses. Review the remaining statutory conditions before filing."*
-
-Do not display ITR-1 confirmed unless every required eligibility condition is positively established.
+1. **When provisionally ITR-1:**
+   - Unchecked checkboxes mean only that the user has not declared the condition.
+   - If no AIS-based blocker is detected and no checklist blocker is selected:
+     **ITR-1 (Sahaj) Provisionally Recommended**
+     Supporting copy:
+     > *"No ITR-1 exclusion was detected from the available AIS data or your current checklist responses. Review the remaining statutory conditions before filing."*
+   - If any checkbox is checked: Dynamically elevates the effective form to **ITR-2 (Elevated by Checklist)** and dispatches `itr-form-changed` to bypass downstream ITR-1 tax calculations.
+2. **When already classified as ITR-2 from AIS signals:**
+   - The checklist is **strictly omitted / hidden**.
+   - The UI presents only the verified statutory disqualifiers extracted directly from AIS data.
 
 ---
 
