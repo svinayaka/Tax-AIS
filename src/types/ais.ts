@@ -142,6 +142,7 @@ export interface SectionStatuses {
   B2?: ExtractionStatus;
   B3?: ExtractionStatus;
   B4?: ExtractionStatus;
+  [key: string]: ExtractionStatus | undefined;
 }
 
 /**
@@ -205,6 +206,7 @@ export interface ExtractionMetadata {
 
 export interface StructuredExtractionResult {
   schema_version: '1.0';
+  extraction_rules_version: string;
   itr_routing_rule_version: string;
   tax_rule_version: string;
   document_type: 'AIS' | 'FORM_26AS';

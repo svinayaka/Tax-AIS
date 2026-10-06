@@ -1,0 +1,98 @@
+{
+  "document_type": "AIS",
+  "extraction": {
+    "financial_year": "2025-26",
+    "assessment_year": "2026-27",
+    "tax_year": "2026-27",
+    "part_a_general_info": {
+      "name_of_assessee": "RAMESH KUMAR",
+      "pan": "ABCDE1234F",
+      "aadhaar": "XXXX XXXX 1234",
+      "date_of_birth": "15/08/1985",
+      "mobile_number": "9876543210",
+      "email_address": "ramesh@example.tax",
+      "address": "123 MG ROAD, BANGALORE, 560001, KARNATAKA"
+    },
+    "part_b1_tds_tcs_transactions": [
+      {
+        "sr_no": 1,
+        "information_code": "TDS-192",
+        "information_description": "Salary received (Section 192)",
+        "information_source": "INFOSYS LIMITED (BLRI01234A)",
+        "total_amount_credited": 1200000,
+        "line_items": [
+          {
+            "sr_no": 1,
+            "quarter": "Q4(Jan-Mar)",
+            "date_of_payment": "25/03/2026",
+            "amount_paid_credited": 1200000,
+            "tds_deducted": 120000,
+            "tds_deposited": 120000,
+            "status": "Active"
+          }
+        ]
+      },
+      {
+        "sr_no": 2,
+        "information_code": "TDS-194A",
+        "information_description": "Interest",
+        "information_source": "other than interest on securities STATE BANK OF INDIA (MUMS05678B)",
+        "total_amount_credited": 25000,
+        "line_items": [
+          {
+            "sr_no": 1,
+            "quarter": "Q4(Jan-Mar)",
+            "date_of_payment": "31/03/2026",
+            "amount_paid_credited": 2500000,
+            "tds_deducted": 2500,
+            "tds_deposited": 2500,
+            "status": "Active"
+          }
+        ]
+      }
+    ],
+    "part_b2_sft_transactions": [],
+    "part_b3_tax_payments": [
+      {
+        "financial_year": "2025-26",
+        "major_head": "Income Tax (Other than Companies)",
+        "minor_head": "Advance Tax",
+        "tax_amount": 10000,
+        "total_challan_amount": 10000,
+        "bsr_code": "0001234",
+        "date_of_deposit": "15/03/2026",
+        "challan_serial_number": 12345
+      }
+    ],
+    "part_b4_demand_refunds": []
+  },
+  "section_statuses": {
+    "part_a": "extracted",
+    "part_b1": "extracted",
+    "part_b2": "not-present",
+    "part_b3": "extracted",
+    "part_b4": "not-present",
+    "A": "extracted",
+    "B1": "extracted",
+    "B2": "not-present",
+    "B3": "extracted",
+    "B4": "not-present"
+  },
+  "itrClassification": {
+    "recommendedForm": "ITR-1",
+    "targetWorkspace": "ITR-1",
+    "isBarredFromItr1": false,
+    "detectedFactors": {
+      "hasCapitalGains": false,
+      "hasPropertyTransactions": false,
+      "hasForeignRemittance": false,
+      "hasLotteryOrGambling": false,
+      "hasCryptoVda": false,
+      "hasBusinessOrProfession": false,
+      "hasSalaryIncome": true,
+      "hasInterestIncome": true,
+      "hasDividendIncome": false,
+      "hasHighCashWithdrawal": false
+    }
+  }
+}

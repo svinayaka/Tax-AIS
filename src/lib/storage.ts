@@ -129,6 +129,7 @@ function migrateSession(session: StoredSession): StoredSession | null {
   }
 
   sd.schema_version = '1.0';
+  sd.extraction_rules_version = sd.extraction_rules_version || '1.0';
   sd.itr_routing_rule_version = sd.itr_routing_rule_version || 'AY2026-27.1';
   sd.tax_rule_version = sd.tax_rule_version || 'AY2026-27.1';
   sd.document_type = sd.document_type || 'AIS';

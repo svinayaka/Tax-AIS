@@ -27,6 +27,9 @@ import type {
   ExtractionWarning,
   SectionStatuses
 } from '../types/ais';
+import type { DetectedAisSection } from '../types/ais-rules';
+import { getAisPartARules, getAisPartBRules, getAisRulesetVersion } from './ais-rule-loader';
+import { detectAisSections } from './ais-section-detector';
 
 export function extractStructuredData(rawText: string, customFields: string[] = []): StructuredExtractionResult {
   if (!rawText || typeof rawText !== 'string') {
@@ -69,14 +72,12 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
 
   // 9. AIS Deterministic extraction if document matches Indian Tax AIS
   const lowerText = cleanedText.toLowerCase();
-  const isForm168 = docClassification.type === 'form_168_future' ||
-    lowerText.includes('form 168') ||
-    lowerText.includes('form no. 168') ||
-    lowerText.includes('form no 168');
-  const isAis = docClassification.type === 'ais' ||
-    isForm168 ||
+  const isForm168Future = lowerText.includes('form 168') || lowerText.includes('form no. 168') || lowerText.includes('form no 168');
+  const isAis = !isForm168Future && (
+    docClassification.type === 'ais' ||
     lowerText.includes('annual information statement') ||
-    (lowerText.includes('assessee') && lowerText.includes('tds') && lowerText.includes('part a'));
+    (lowerText.includes('assessee') && lowerText.includes('tds') && lowerText.includes('part a'))
+  );
 
   let extraction: AisDeveloperSchema | null = null;
   let sectionStatuses: SectionStatuses = {
@@ -88,24 +89,23 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
   };
   let warnings: ExtractionWarning[] = [];
 
-  if (isAis) {
+  if (isForm168Future) {
+    warnings.push({
+      code: 'FORM_168_FUTURE_MODE',
+      section: 'A',
+      message: 'Form No. 168 under Income-tax Act, 2025 is a future statutory format and is not routed through AY 2026-27 rules.'
+    });
+  } else if (isAis) {
     const envelope = extractAisEnvelope(cleanedText);
     extraction = envelope.schema;
     sectionStatuses = envelope.section_statuses;
     warnings = envelope.warnings;
   }
 
-  if (isForm168) {
-    warnings.push({
-      code: 'FORM_168_FUTURE_MODE',
-      section: 'A',
-      message: 'Form No. 168 under Income-tax Act, 2025 is extracted in canonical compatibility mode with Income-tax Act, 1961 schema.'
-    });
-  }
-
   // Assemble full structured output
   return {
     schema_version: SCHEMA_VERSION,
+    extraction_rules_version: getAisRulesetVersion(),
     itr_routing_rule_version: ITR_ROUTING_RULE_VERSION,
     tax_rule_version: TAX_RULE_VERSION,
     document_type: docClassification.type === 'form_26as' ? 'FORM_26AS' : 'AIS',
@@ -148,6 +148,7 @@ function cleanText(text: string): string {
 function createEmptyResult(): StructuredExtractionResult {
   return {
     schema_version: SCHEMA_VERSION,
+    extraction_rules_version: getAisRulesetVersion(),
     itr_routing_rule_version: ITR_ROUTING_RULE_VERSION,
     tax_rule_version: TAX_RULE_VERSION,
     document_type: 'AIS',
@@ -181,8 +182,8 @@ function createEmptyResult(): StructuredExtractionResult {
 }
 
 const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: number }> = [
-  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 15 },
-  { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'annual tax statement under section 203aa'], score: 15 },
+  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 25 },
+  { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'annual tax statement under section 203aa'], score: 25 },
   { type: 'ais', keywords: ['annual information statement'], score: 5 },
   { type: 'ais', keywords: ['income tax department', 'income-tax department'], score: 4 },
   { type: 'ais', keywords: ['part a', 'part b'], score: 4 },
@@ -591,28 +592,15 @@ export function extractAssessmentYear(text: string): string {
   return normalizeYearRange(match[1]);
 }
 
-export function extractTaxYearRaw(text: string): string {
-  const match = text.match(/(?:tax\s+year\s*(?:\(t\.?y\.?\))?|t\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
-  if (!match) return '';
-  return normalizeYearRange(match[1]);
-}
-
 interface ResolvedPeriodYears {
   fy: string;
   ay: string;
-  ty: string;
 }
 
 function resolveRawPeriodYears(text: string): ResolvedPeriodYears {
-  let fy = extractFinancialYear(text);
-  let ay = extractAssessmentYear(text);
-  const ty = extractTaxYearRaw(text);
-
-  if (ty) {
-    ay = ay || ty;
-    fy = fy || deriveFyFromAy(ay);
-  }
-  return { fy, ay, ty };
+  const fy = extractFinancialYear(text);
+  const ay = extractAssessmentYear(text);
+  return { fy, ay };
 }
 
 function validateAndDerivePeriod(
@@ -623,7 +611,7 @@ function validateAndDerivePeriod(
 
   if (fy && ay) {
     const expectedAy = deriveAyFromFy(fy);
-    if (expectedAy && expectedAy !== ay && !period.ty) {
+    if (expectedAy && expectedAy !== ay) {
       warnings.push({
         code: 'PERIOD_AMBIGUOUS',
         section: 'A',
@@ -668,7 +656,6 @@ function validateAndDerivePeriod(
 export function extractStatutoryPeriod(text: string): {
   financial_year: string;
   assessment_year: string;
-  tax_year?: string;
   warnings: ExtractionWarning[];
 } {
   const warnings: ExtractionWarning[] = [];
@@ -678,14 +665,13 @@ export function extractStatutoryPeriod(text: string): {
   return {
     financial_year: derived.financial_year,
     assessment_year: derived.assessment_year,
-    tax_year: rawYears.ty || derived.assessment_year || derived.financial_year || '',
     warnings
   };
 }
 
 export function extractTaxYear(text: string): string {
   const period = extractStatutoryPeriod(text);
-  return period.tax_year || period.assessment_year || period.financial_year || '';
+  return period.assessment_year || period.financial_year || '';
 }
 
 function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
@@ -1218,6 +1204,39 @@ export function extractPartB4DemandRefunds(
   return { refunds: partB4, status };
 }
 
+/**
+ * Static Parser Registry
+ * Maps declarative parser IDs from AIS rule JSON to pure TypeScript extraction functions.
+ * Rule JSON may reference parser IDs only; dynamic execution or eval is strictly prohibited.
+ */
+export const AIS_PARSER_REGISTRY = {
+  partA: (sectionText: string): PartAGeneralInfo => extractPartAGeneralInfo(sectionText),
+  partB1: (
+    sectionText: string,
+    lines: string[],
+    warnings: ExtractionWarning[]
+  ): { transactions: PartB1TdsTcsTransaction[]; status: ExtractionStatus } =>
+    extractPartB1Transactions(sectionText, lines, warnings),
+  partB2: (
+    sectionText: string,
+    _lines: string[],
+    warnings: ExtractionWarning[]
+  ): { transactions: PartB2SftTransaction[]; status: ExtractionStatus } =>
+    extractPartB2SftTransactions(sectionText, warnings),
+  partB3: (
+    sectionText: string,
+    _lines: string[],
+    warnings: ExtractionWarning[]
+  ): { payments: PartB3TaxPayment[]; status: ExtractionStatus } =>
+    extractPartB3TaxPayments(sectionText, warnings),
+  partB4: (
+    sectionText: string,
+    _lines: string[],
+    warnings: ExtractionWarning[]
+  ): { refunds: PartB4DemandRefund[]; status: ExtractionStatus } =>
+    extractPartB4DemandRefunds(sectionText, warnings)
+} as const;
+
 export function extractAisEnvelope(rawText: string): {
   schema: AisDeveloperSchema;
   section_statuses: SectionStatuses;
@@ -1226,17 +1245,42 @@ export function extractAisEnvelope(rawText: string): {
   const text = cleanText(rawText || '');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
+  const partARules = getAisPartARules();
+  const partBRules = getAisPartBRules();
+
   const periodRes = extractStatutoryPeriod(text);
   const warnings: ExtractionWarning[] = [...periodRes.warnings];
 
-  const partA = extractPartAGeneralInfo(text);
+  // 1. Detect physical sections according to rule declarations
+  const detected = detectAisSections(text, partARules, partBRules);
+
+  // 2. Dispatch Part A through registry
+  const partAText = detected.partA ? detected.partA.rawText : text;
+  const partA = AIS_PARSER_REGISTRY.partA(partAText);
   const isPartAPresent = Boolean(partA.pan || partA.name_of_assessee);
   const partAStatus: ExtractionStatus = isPartAPresent ? 'extracted' : 'not-present';
 
-  const b1Res = extractPartB1Transactions(text, lines, warnings);
-  const b2Res = extractPartB2SftTransactions(text, warnings);
-  const b3Res = extractPartB3TaxPayments(text, warnings);
-  const b4Res = extractPartB4DemandRefunds(text, warnings);
+  // 3. Dispatch discovered Part B sections through registry
+  const partBMap = new Map<string, DetectedAisSection>();
+  for (const sec of detected.partBSections) {
+    partBMap.set(sec.id, sec);
+  }
+
+  const b1Section = partBMap.get('B1');
+  const b1Text = b1Section ? b1Section.rawText : text;
+  const b1Res = AIS_PARSER_REGISTRY.partB1(b1Text, lines, warnings);
+
+  const b2Section = partBMap.get('B2');
+  const b2Text = b2Section ? b2Section.rawText : text;
+  const b2Res = AIS_PARSER_REGISTRY.partB2(b2Text, lines, warnings);
+
+  const b3Section = partBMap.get('B3');
+  const b3Text = b3Section ? b3Section.rawText : text;
+  const b3Res = AIS_PARSER_REGISTRY.partB3(b3Text, lines, warnings);
+
+  const b4Section = partBMap.get('B4');
+  const b4Text = b4Section ? b4Section.rawText : text;
+  const b4Res = AIS_PARSER_REGISTRY.partB4(b4Text, lines, warnings);
 
   const section_statuses: SectionStatuses = {
     part_a: partAStatus,
@@ -1250,6 +1294,13 @@ export function extractAisEnvelope(rawText: string): {
     B3: b3Res.status,
     B4: b4Res.status
   };
+
+  // Preserve discovered unknown/unsupported numbered sections in section_statuses
+  for (const sec of detected.partBSections) {
+    if (!sec.supported) {
+      section_statuses[sec.id] = 'unsupported';
+    }
+  }
 
   const schema: AisDeveloperSchema = {
     financial_year: periodRes.financial_year,

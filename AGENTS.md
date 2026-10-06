@@ -6,12 +6,17 @@ Language / Framework: TypeScript (Strict), Web Components (Stencil-like conventi
 Code Quality: SonarQube (eslint-plugin-sonarjs), Stylelint, Husky, lint-staged
 
 1. Project Purpose & Architecture
-Tax-AIS is a specialized, privacy-first, 100% in-browser extraction engine and visual dashboard for Indian Income Tax Annual Information Statement (AIS) and Form 26AS documents under the Income-tax Act, 1961 (FY 2025-26 / AY 2026-27). Form No. 168 under the Income-tax Act, 2025 is supported in canonical compatibility mode with the canonical schema (mapping Tax Year (T.Y.) 2026-27 to Assessment Year 2026-27 / Financial Year 2025-26) while emitting a FORM_168_FUTURE_MODE statutory warning.
-Current scope: AIS extraction under Income-tax Act, 1961 is fully supported; Form 168 AIS is supported in canonical compatibility mode; Form 26AS support is partial/planned.
-Key Architecture Modules (TypeScript)
+Tax-AIS is a specialized, privacy-first, 100% in-browser extraction engine and visual dashboard for Indian Income Tax Annual Information Statement (AIS) and Form 26AS documents under the Income-tax Act, 1961 (FY 2025-26 / AY 2026-27). Form No. 168 under the Income-tax Act, 2025 operates in a separate future statutory mode (using tax_year, without fabricating FY/AY or silently routing into AY 2026-27 rules) while emitting an explicit FORM_168_FUTURE_MODE statutory warning.
+Current scope: AIS extraction under Income-tax Act, 1961 is fully supported; Form 168 AIS is recognized in future statutory mode; Form 26AS support is partial/planned.
+Key Architecture Modules (TypeScript & Bundled Rules)
+- src/rules/ais-part-a.json: Declarative Part A metadata, boundary markers, and canonical field aliases.
+- src/rules/ais-part-b.json: Declarative Part B discovery patterns (Part B([0-9]+)), parser routing, and unknown section policies ('preserve-as-unsupported').
+- src/types/ais-rules.ts: Strict TypeScript contracts for AIS declarative rules and parser ID union (AisParserId).
+- src/lib/ais-rule-loader.ts: Bundled rule configuration loader, schema validator, and version provider.
+- src/lib/ais-section-detector.ts: Physical Part A and Part Bn section boundary detector.
 - src/types/ais.ts: Strict TypeScript interfaces and developer schema contract (PartAGeneralInfo, PartB1TdsTcsTransaction, PartB3TaxPayment, AisDeveloperSchema, StructuredExtractionResult, ItrClassificationResult).
 - src/lib/pdf-parser.ts: Binary PDF reader powered by Mozilla PDF.js. Handles spatial layout reconstruction, line grouping with tolerance, and encrypted PDF password callbacks (PAN + DDMMYYYY) with HiDPI Retina canvas scaling.
-- src/lib/extractor.ts: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund).
+- src/lib/extractor.ts: Deterministic rule-based and spatial extractor for Part A (Assessee Profile) and Part B (B1 TDS/TCS, B2 SFT, B3 Tax Payments / Challans, B4 Demand & Refund) dispatched through static AIS_PARSER_REGISTRY.
 - src/lib/itr-classifier.ts: Statutory ITR Form Classification Engine (ITR-1 Sahaj vs ITR-2 / ITR-3 / ITR-4) evaluating CBDT rules against AIS transactions.
 - src/lib/extractor-client.ts: Web Worker orchestrator and resilient main-thread fallback manager.
 - src/workers/extractor.worker.ts: Dedicated background Web Worker executing pure token extraction and ITR classification off the main UI thread.

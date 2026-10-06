@@ -30,6 +30,7 @@ import {
   type PartB1LineItem
 } from './types/ais';
 import { deriveAyFromFy, deriveFyFromAy } from './lib/extractor';
+import { getAisRulesetVersion } from './lib/ais-rule-loader';
 import { saveTaxSession, loadTaxSession, clearTaxSession, formatRemainingTime } from './lib/storage';
 
 // ==========================================================================
@@ -263,6 +264,7 @@ function buildJsonStructuredData(
 
   return {
     schema_version: rawParsed.schema_version || SCHEMA_VERSION,
+    extraction_rules_version: rawParsed.extraction_rules_version || getAisRulesetVersion(),
     itr_routing_rule_version: rawParsed.itr_routing_rule_version || ITR_ROUTING_RULE_VERSION,
     tax_rule_version: rawParsed.tax_rule_version || TAX_RULE_VERSION,
     document_type: rawParsed.document_type || 'AIS',

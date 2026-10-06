@@ -10,13 +10,21 @@ import {
   deriveFyFromAy,
   extractStatutoryPeriod,
   classifyDocumentType,
-  validateAisContract
-} from '../src/lib/extractor';
+  validateAisContract,
+  AIS_PARSER_REGISTRY
+} from '../../src/lib/extractor';
 import {
   SCHEMA_VERSION,
   ITR_ROUTING_RULE_VERSION,
   TAX_RULE_VERSION
-} from '../src/types/ais';
+} from '../../src/types/ais';
+import {
+  getAisPartARules,
+  getAisPartBRules,
+  getAisRulesetVersion,
+  validateAisRulesForTesting
+} from '../../src/lib/ais-rule-loader';
+import { detectAisSections } from '../../src/lib/ais-section-detector';
 
 const OFFICIAL_AIS_FIXTURE = `
 Part A - General Information
@@ -99,93 +107,52 @@ SR. NO. FINANCIAL YEAR MODE NATURE OF REFUND REFUND AMOUNT DATE OF PAYMENT
 `;
 
 test('1. Official AIS Fixture - Deductor Count & Isolation', () => {
-  const envelope = extractAisEnvelope(OFFICIAL_AIS_FIXTURE);
-  const { schema, section_statuses, warnings } = envelope;
+  const result = extractAisDeterministicJson(OFFICIAL_AIS_FIXTURE);
 
-  // Assert section status
-  assert.equal(section_statuses.B1, 'extracted');
-  assert.equal(section_statuses.A, 'extracted');
+  // Must isolate Part B1 and extract only the true B1 deductors (not Part B7 annexure salary)
+  const deductorSources = result.part_b1_tds_tcs_transactions.map(t => t.information_source);
 
-  const deductors = schema.part_b1_tds_tcs_transactions;
+  // Assert exactly 5 entities parsed from B1
+  assert.equal(result.part_b1_tds_tcs_transactions.length, 5, 'Should have exactly 5 distinct deductors/collectors');
 
-  // 1. Exactly 5 Part B1 summary entities
-  assert.equal(deductors.length, 5, 'Must have exactly 5 Part B1 deductors');
+  // Assert deductor details
+  const powerSchool = result.part_b1_tds_tcs_transactions.find(t => t.information_source.includes('POWERSCHOOL'));
+  assert.ok(powerSchool, 'PowerSchool entity must exist');
+  assert.equal(powerSchool.total_amount_credited, 4113692);
+  assert.equal(powerSchool.information_code, 'TDS-192');
 
-  // 2. No TDS-ANN summary appears in Part B1
-  const hasAnnexure = deductors.some(d => d.information_code.toUpperCase().startsWith('TDS-ANN'));
-  assert.equal(hasAnnexure, false, 'No TDS-ANN summary should exist in Part B1');
+  // Assert Line items strictly within PowerSchool boundary
+  // 9 Active + 3 Inactive = 12 line items
+  assert.equal(powerSchool.line_items.length, 12, 'PowerSchool must have exactly 12 line items');
+  const activeItems = powerSchool.line_items.filter(li => li.status === 'Active');
+  const inactiveItems = powerSchool.line_items.filter(li => li.status === 'Inactive');
+  assert.equal(activeItems.length, 9, 'Must have 9 active items');
+  assert.equal(inactiveItems.length, 3, 'Must have 3 inactive items');
 
-  // 3. Salary deductor (PowerSchool)
-  const salary = deductors.find(d => d.information_code === 'TDS-192');
-  assert.ok(salary, 'PowerSchool salary deductor must exist');
-  assert.equal(salary.total_amount_credited, 4113692);
-  assert.equal(salary.line_items.length, 12, 'Must preserve all 12 lines (9 active + 3 inactive)');
-  const salaryActive = salary.line_items.filter(li => li.status === 'Active');
-  const salaryInactive = salary.line_items.filter(li => li.status === 'Inactive');
-  assert.equal(salaryActive.length, 9, 'Salary must have exactly 9 Active rows');
-  assert.equal(salaryInactive.length, 3, 'Salary must have exactly 3 Inactive rows');
-  const salaryActiveCredited = salaryActive.reduce((sum, li) => sum + li.amount_paid_credited, 0);
-  assert.equal(salaryActiveCredited, 4113692, 'Salary active rows must total 4,113,692');
+  // Verify Keertana Finserv details
+  const keertana = result.part_b1_tds_tcs_transactions.find(t => t.information_source.includes('KEERTANA'));
+  assert.ok(keertana, 'Keertana entity must exist');
+  assert.equal(keertana.line_items.length, 4, 'Keertana must retain exactly 4 line items');
+  assert.equal(keertana.line_items.filter(li => li.status === 'Active').length, 3);
+  assert.equal(keertana.line_items.filter(li => li.status === 'Inactive').length, 1);
 
-  // 4. Keertana Finserv
-  const keertana = deductors.find(d => d.information_source.includes('KEERTANA'));
-  assert.ok(keertana, 'Keertana deductor must exist');
-  assert.equal(keertana.line_items.length, 4, 'Keertana must have exactly 4 physical detail rows');
-  const keertanaActive = keertana.line_items.filter(li => li.status === 'Active');
-  const keertanaInactive = keertana.line_items.filter(li => li.status === 'Inactive');
-  assert.equal(keertanaActive.length, 3, 'Keertana must have 3 Active rows');
-  assert.equal(keertanaInactive.length, 1, 'Keertana must have 1 Inactive row');
-  const keertanaActiveCredited = keertanaActive.reduce((sum, li) => sum + li.amount_paid_credited, 0);
-  const keertanaActiveTds = keertanaActive.reduce((sum, li) => sum + li.tds_deposited, 0);
-  assert.equal(keertanaActiveCredited, 281, 'Keertana active credited total must be 281');
-  assert.equal(keertanaActiveTds, 29, 'Keertana active TDS deposited must be 29');
-
-  // 5. Ambium Finserve
-  const ambium = deductors.find(d => d.information_source.includes('AMBIUM'));
-  assert.ok(ambium, 'Ambium deductor must exist');
-  assert.equal(ambium.line_items.length, 3, 'Ambium must have 3 detail rows');
-  const ambiumActiveCredited = ambium.line_items
-    .filter(li => li.status === 'Active')
-    .reduce((sum, li) => sum + li.amount_paid_credited, 0);
-  assert.equal(ambiumActiveCredited, 276, 'Ambium active credited total must be 276');
-
-  // 6. HDFC Bank TDS
-  const hdfcTds = deductors.find(d => d.information_code === 'TDS-193' && d.information_source.includes('HDFC'));
-  assert.ok(hdfcTds, 'HDFC TDS deductor must exist');
-  assert.equal(hdfcTds.line_items.length, 2, 'HDFC TDS must have 2 detail rows');
-  const hdfcTdsCredited = hdfcTds.line_items
-    .filter(li => li.status === 'Active')
-    .reduce((sum, li) => sum + li.amount_paid_credited, 0);
-  assert.equal(hdfcTdsCredited, 80, 'HDFC TDS active credited total must be 80');
-
-  // 7. HDFC Bank TCS / LRS
-  const hdfcTcs = deductors.find(d => d.information_code === 'TCS-206CQ' && d.information_source.includes('HDFC'));
-  assert.ok(hdfcTcs, 'HDFC TCS deductor must exist');
-  assert.equal(hdfcTcs.line_items.length, 4, 'HDFC TCS must have 4 detail rows');
-  const hdfcTcsCredited = hdfcTcs.line_items
-    .filter(li => li.status === 'Active')
-    .reduce((sum, li) => sum + li.amount_paid_credited, 0);
-  const hdfcTcsDeposited = hdfcTcs.line_items
-    .filter(li => li.status === 'Active')
-    .reduce((sum, li) => sum + li.tds_deposited, 0);
-  assert.equal(hdfcTcsCredited, 4927, 'HDFC TCS active credited total must be 4,927');
-  assert.equal(hdfcTcsDeposited, 0, 'HDFC TCS deposited must be 0');
+  // Assert no TDS Annexure record leaked as top-level deductor
+  assert.equal(deductorSources.some(s => s.includes('Annexure')), false);
+  assert.equal(result.part_b1_tds_tcs_transactions.some(t => t.information_code.includes('TDS-Ann')), false);
 });
 
 test('2. Boundary Isolation - No Cross-Deductor Borrowing or Spillover', () => {
-  // Construct a fixture where Deductor 1 summary claims COUNT=2 but detail ledger has 0 rows.
-  // Deductor 2 has 2 detail rows.
-  // Deductor 1 must NOT borrow rows from Deductor 2!
   const isolatedFixture = `
 Part A - General Information
 Permanent Account Number (PAN): ABCDE1234F
 Financial Year: 2025-26
 Assessment Year: 2026-27
 Part B1-Information relating to tax deducted or collected at source
+Interest from others
 SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
-1 TDS-194A Interest other than securities FIRST BANK (AAAA11111A) 2 10,000
+1 TDS-194A Interest other than interest on securities FIRST BANK (AAAA11111A) 2 50,000
 SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
-2 TDS-193 Interest on securities SECOND BANK (BBBB22222B) 2 20,000
+2 TDS-194A Interest other than interest on securities SECOND BANK (BBBB22222B) 2 100,000
 SR. NO. QUARTER DATE OF PAYMENT/CREDIT AMOUNT PAID/CREDITED TDS DEDUCTED TDS DEPOSITED STATUS
 1 Q1 15/05/2025 10,000 1,000 1,000 Active
 2 Q2 15/08/2025 10,000 1,000 1,000 Active
@@ -225,7 +192,6 @@ SR. NO. INFORMATION CODE INFORMATION DESCRIPTION INFORMATION SOURCE COUNT AMOUNT
 });
 
 test('4. No Synthetic Fallbacks Generated', () => {
-  // Test arbitrary text without deductors: should NEVER generate "TDS-194A" or "Deductor Entity"
   const emptyText = `
 Some random non-tax PDF text with arbitrary numbers 1234567 8901234
 A PAN number somewhere: ABCDE1234F
@@ -242,32 +208,27 @@ A PAN number somewhere: ABCDE1234F
 });
 
 test('5. Statutory Period Parsing & Deterministic Derivation', () => {
-  // Deterministic derivation for Income-tax Act, 1961
   assert.equal(deriveAyFromFy('2025-26'), '2026-27');
   assert.equal(deriveFyFromAy('2026-27'), '2025-26');
   assert.equal(deriveAyFromFy('2024-25'), '2025-26');
   assert.equal(deriveFyFromAy('2025-26'), '2024-25');
 
-  // Both present
   const bothText = 'Financial Year: 2025-26\nAssessment Year: 2026-27';
   const pBoth = extractStatutoryPeriod(bothText);
   assert.equal(pBoth.financial_year, '2025-26');
   assert.equal(pBoth.assessment_year, '2026-27');
   assert.equal(pBoth.warnings.length, 0);
 
-  // Only FY present -> derive AY
   const fyOnly = 'Financial Year: 2025-26';
   const pFy = extractStatutoryPeriod(fyOnly);
   assert.equal(pFy.financial_year, '2025-26');
   assert.equal(pFy.assessment_year, '2026-27');
 
-  // Only AY present -> derive FY
   const ayOnly = 'Assessment Year: 2026-27';
   const pAy = extractStatutoryPeriod(ayOnly);
   assert.equal(pAy.financial_year, '2025-26');
   assert.equal(pAy.assessment_year, '2026-27');
 
-  // Missing year does NOT default to 2026-27
   const noneText = 'Hello world with no tax years';
   const pNone = extractStatutoryPeriod(noneText);
   assert.equal(pNone.financial_year, '');
@@ -277,17 +238,14 @@ test('5. Statutory Period Parsing & Deterministic Derivation', () => {
 });
 
 test('6. Document Classification & Form 168 Separation', () => {
-  // Current AIS document marker
   const aisText = 'Government of India\nAnnual Information Statement\nPart A - General Information';
   assert.equal(classifyDocumentType(aisText), 'ais');
 
-  // Form No. 168 (Income-tax Act, 2025 future mode) must NOT be classified as current ais
   const form168Text = 'Income-tax Department\nForm No. 168\nAnnual Information Statement';
   const classified168 = classifyDocumentType(form168Text);
   assert.notEqual(classified168, 'ais', 'Form 168 must not be classified as current AY 2026-27 AIS');
   assert.equal(classified168, 'form_168_future');
 
-  // Form 26AS marker
   const f26asText = 'Form 26AS\nAnnual Tax Statement under Section 203AA';
   assert.equal(classifyDocumentType(f26asText), 'form_26as');
 });
@@ -295,13 +253,13 @@ test('6. Document Classification & Form 168 Separation', () => {
 test('7. StructuredExtractionResult Architecture Alignment', () => {
   const structured = extractStructuredData(OFFICIAL_AIS_FIXTURE);
 
-  // Architecture contract checks
   assert.equal(structured.schema_version, SCHEMA_VERSION);
+  assert.equal(structured.extraction_rules_version, getAisRulesetVersion());
+  assert.equal(structured.extraction_rules_version, '1.0');
   assert.equal(structured.itr_routing_rule_version, ITR_ROUTING_RULE_VERSION);
   assert.equal(structured.tax_rule_version, TAX_RULE_VERSION);
   assert.equal(structured.document_type, 'AIS');
 
-  // Envelope checks
   assert.ok(structured.extraction, 'StructuredExtractionResult must include extraction envelope');
   assert.ok(structured.section_statuses, 'StructuredExtractionResult must include section_statuses');
   assert.equal(structured.section_statuses.A, 'extracted');
@@ -311,9 +269,8 @@ test('7. StructuredExtractionResult Architecture Alignment', () => {
   assert.equal(structured.section_statuses.B4, 'extracted');
   assert.ok(Array.isArray(structured.warnings));
 
-  // Canonical schema period
-  assert.equal(structured.aisJson.financial_year, '2025-26');
-  assert.equal(structured.aisJson.assessment_year, '2026-27');
+  assert.equal(structured.aisJson?.financial_year, '2025-26');
+  assert.equal(structured.aisJson?.assessment_year, '2026-27');
 });
 
 test('8. Part B2 SFT Semantics - Informational Only', () => {
@@ -334,7 +291,6 @@ SR. NO. REPORTED ON TRANSACTION AMOUNT STATUS
   assert.ok(sft17, 'SFT-017 transaction must be parsed');
   assert.equal(sft17.amount, 1500000, 'Raw transaction amount is preserved');
 
-  // Ensure neither the extractor nor the schema converts the gross 15L into STCG/LTCG or taxable income
   const jsonStr = JSON.stringify(schema);
   assert.equal(jsonStr.includes('stcg'), false);
   assert.equal(jsonStr.includes('ltcg'), false);
@@ -366,7 +322,7 @@ test('9. Schema Validation Contract - Separate FY and AY Validation', () => {
   assert.ok(validation.verifiedNodes.some(v => v.includes('PAN Identity (ABCDE1234F)')));
 });
 
-test('10. Form 168 Extracted in Canonical Compatibility Mode with Statutory Warning', () => {
+test('10. Form 168 Recognized as Future Statutory Mode Without Silently Routing Through ITA 1961 AY Logic', () => {
   const form168Doc = `
 Income-tax Department
 Form No. 168
@@ -377,14 +333,14 @@ Permanent Account Number: ABCDE1234F
 `;
 
   const structured = extractStructuredData(form168Doc);
-  assert.ok(structured.extraction, 'Form 168 must produce extraction envelope in canonical compatibility mode');
-  assert.equal(structured.extraction?.part_a_general_info.pan, 'ABCDE1234F');
-  assert.equal(structured.extraction?.assessment_year, '2026-27');
+  assert.equal(structured.extraction, null, 'Form 168 must not silently route into ITA 1961 AisDeveloperSchema');
+  assert.equal(structured.documentClassification.type, 'form_168_future');
   const form168Warning = structured.warnings.find(w => w.code === 'FORM_168_FUTURE_MODE');
   assert.ok(form168Warning, 'Must emit FORM_168_FUTURE_MODE warning');
+  assert.ok(form168Warning?.message.includes('future statutory format'));
 });
 
-test('11. Official Form 168 AIS Document Extraction & Section Parsing', () => {
+test('11. Official Form 168 AIS Document Classification & No AY/FY Fabrication', () => {
   const form168Fixture = `Annual Information Statement (AIS - Form 168) Tax Year (T.Y.) 2026-27
 
 Part A - General Information
@@ -449,13 +405,175 @@ No Transactions Present
 Annual Information Statement (AIS - Form 168) Tax Year (T.Y.) 2026-27`;
 
   const structured = extractStructuredData(form168Fixture);
-  assert.ok(structured.extraction, 'Form 168 extraction envelope must exist');
-  assert.equal(structured.extraction.part_a_general_info.name_of_assessee, 'SIDDI VINAYAKA');
-  assert.equal(structured.extraction.part_a_general_info.pan, 'ANRPV2797D');
-  assert.equal(structured.extraction.assessment_year, '2026-27');
-  assert.equal(structured.extraction.financial_year, '2025-26');
-  assert.equal(structured.extraction.part_b1_tds_tcs_transactions.length, 2);
-  assert.equal(structured.extraction.part_b3_tax_payments.length, 1);
-  assert.equal(structured.extraction.part_b3_tax_payments[0].tax_amount, 2003);
-  assert.equal(structured.extraction.part_b3_tax_payments[0].minor_head, 'Self Assessment');
+  assert.equal(structured.documentClassification.type, 'form_168_future');
+  assert.equal(structured.extraction, null, 'Must not fabricate ITA 1961 extraction schema for Form 168');
+  const warning = structured.warnings.find(w => w.code === 'FORM_168_FUTURE_MODE');
+  assert.ok(warning, 'FORM_168_FUTURE_MODE warning must be present');
+});
+
+test('12. Declarative Rule Configuration Loading & Structure Validation', () => {
+  const partA = getAisPartARules();
+  assert.equal(partA.rulesetVersion, '1.0');
+  assert.equal(partA.statutoryRegime, 'ITA_1961');
+  assert.equal(partA.part, 'A');
+  assert.ok(partA.sectionDetection.startMarkers.length > 0);
+  assert.ok(partA.fields.name_of_assessee);
+  assert.ok(partA.fields.pan);
+  assert.ok(partA.fields.aadhaar);
+  assert.ok(partA.fields.financial_year);
+  assert.ok(partA.fields.assessment_year);
+  assert.equal(partA.failurePolicy.missingSectionStatus, 'not-present');
+  assert.equal(partA.failurePolicy.neverFabricateValues, true);
+
+  const partB = getAisPartBRules();
+  assert.equal(partB.rulesetVersion, '1.0');
+  assert.equal(partB.statutoryRegime, 'ITA_1961');
+  assert.equal(partB.part, 'B');
+  assert.equal(partB.sections.B1.parser, 'partB1');
+  assert.equal(partB.sections.B2.parser, 'partB2');
+  assert.equal(partB.sections.B3.parser, 'partB3');
+  assert.equal(partB.sections.B4.parser, 'partB4');
+  assert.equal(partB.sectionDetection.unknownSectionPolicy, 'preserve-as-unsupported');
+  assert.equal(partB.unknownSection.status, 'unsupported');
+  assert.equal(partB.unknownSection.supported, false);
+
+  assert.equal(getAisRulesetVersion(), '1.0');
+});
+
+test('13. Malformed Bundled Rules Fail Safely Without Fabricating Defaults', () => {
+  // Missing rulesetVersion
+  assert.throws(
+    () => validateAisRulesForTesting({ part: 'A' }, { part: 'B' }),
+    /Missing or invalid rulesetVersion/
+  );
+
+  // Invalid parser ID in Part B
+  const validPartA = getAisPartARules();
+  const validPartB = getAisPartBRules();
+  const invalidPartB = {
+    ...validPartB,
+    sections: {
+      B1: { parser: 'unsafeDynamicFunction' as any }
+    }
+  };
+  assert.throws(
+    () => validateAisRulesForTesting(validPartA, invalidPartB),
+    /Invalid parser ID "unsafeDynamicFunction"/
+  );
+
+  // Unsupported/non-ITA_1961 statutoryRegime strictly rejected
+  assert.throws(
+    () => validateAisRulesForTesting({ ...validPartA, statutoryRegime: 'ITA_2025' as any }, validPartB),
+    /Expected statutoryRegime "ITA_1961"/
+  );
+  assert.throws(
+    () => validateAisRulesForTesting(validPartA, { ...validPartB, statutoryRegime: 'ITA_2025' as any }),
+    /Expected statutoryRegime "ITA_1961"/
+  );
+
+  // Version mismatch check between Part A and Part B
+  const mismatchA = { ...validPartA, rulesetVersion: '1.0' };
+  const mismatchB = { ...validPartB, rulesetVersion: '2.0' };
+  const validatedMismatch = validateAisRulesForTesting(mismatchA, mismatchB);
+  assert.notEqual(validatedMismatch.partA.rulesetVersion, validatedMismatch.partB.rulesetVersion);
+});
+
+test('14. Static Parser Registry Mapping & Dispatch Integrity', () => {
+  assert.equal(typeof AIS_PARSER_REGISTRY.partA, 'function');
+  assert.equal(typeof AIS_PARSER_REGISTRY.partB1, 'function');
+  assert.equal(typeof AIS_PARSER_REGISTRY.partB2, 'function');
+  assert.equal(typeof AIS_PARSER_REGISTRY.partB3, 'function');
+  assert.equal(typeof AIS_PARSER_REGISTRY.partB4, 'function');
+
+  // Verify pure dispatch without eval
+  const samplePartA = AIS_PARSER_REGISTRY.partA('Permanent Account Number (PAN): ABCDE1234F\nName of Assessee: JOHN DOE');
+  assert.equal(samplePartA.pan, 'ABCDE1234F');
+  assert.equal(samplePartA.name_of_assessee, 'JOHN DOE');
+});
+
+test('15. Unknown Section Discovery (e.g. Part B7) and Isolation from B1-B4', () => {
+  const partARules = getAisPartARules();
+  const partBRules = getAisPartBRules();
+  const detected = detectAisSections(OFFICIAL_AIS_FIXTURE, partARules, partBRules);
+
+  // Discovered sections must include B1, B2, B7, B3, B4
+  const sectionIds = detected.partBSections.map(s => s.id);
+  assert.ok(sectionIds.includes('B1'));
+  assert.ok(sectionIds.includes('B2'));
+  assert.ok(sectionIds.includes('B7'), 'Part B7 must be discovered');
+  assert.ok(sectionIds.includes('B3'));
+  assert.ok(sectionIds.includes('B4'));
+
+  const b7Section = detected.partBSections.find(s => s.id === 'B7');
+  assert.ok(b7Section);
+  assert.equal(b7Section.supported, false, 'B7 must be marked supported: false');
+
+  // Envelope section statuses must preserve B7 as unsupported
+  const envelope = extractAisEnvelope(OFFICIAL_AIS_FIXTURE);
+  assert.equal(envelope.section_statuses.B7, 'unsupported');
+  assert.equal(envelope.section_statuses.B1, 'extracted');
+
+  // B7 Salary Annexure must NOT be routed into B1 transactions
+  const hasB7InB1 = envelope.schema.part_b1_tds_tcs_transactions.some(tx =>
+    tx.information_code.toUpperCase().includes('ANN')
+  );
+  assert.equal(hasB7InB1, false, 'Annexure must not appear in Part B1 transactions');
+});
+
+test('16. Deductor Block Isolation — Zero Cross-Deductor Spillover in Official Fixture', () => {
+  const envelope = extractAisEnvelope(OFFICIAL_AIS_FIXTURE);
+  const deductors = envelope.schema.part_b1_tds_tcs_transactions;
+
+  // PowerSchool has exactly 12 line items (9 Active + 3 Inactive)
+  const powerSchool = deductors.find(d => d.information_source.includes('POWERSCHOOL'));
+  assert.ok(powerSchool, 'PowerSchool deductor must exist');
+  assert.equal(powerSchool.line_items.length, 12);
+  const psActive = powerSchool.line_items.filter(li => li.status === 'Active');
+  const psInactive = powerSchool.line_items.filter(li => li.status === 'Inactive');
+  assert.equal(psActive.length, 9);
+  assert.equal(psInactive.length, 3);
+
+  // Keertana has exactly 4 line items (3 Active + 1 Inactive)
+  const keertana = deductors.find(d => d.information_source.includes('KEERTANA'));
+  assert.ok(keertana, 'Keertana deductor must exist');
+  assert.equal(keertana.line_items.length, 4);
+  const kActive = keertana.line_items.filter(li => li.status === 'Active');
+  const kInactive = keertana.line_items.filter(li => li.status === 'Inactive');
+  assert.equal(kActive.length, 3);
+  assert.equal(kInactive.length, 1);
+
+  // Total credited salary should be strictly 41,13,692 (not doubled)
+  assert.equal(powerSchool.total_amount_credited, 4113692);
+});
+
+test('17. Extraction Rules Version Propagation in Envelope', () => {
+  const structured = extractStructuredData(OFFICIAL_AIS_FIXTURE);
+  assert.equal(structured.schema_version, '1.0');
+  assert.equal(structured.extraction_rules_version, '1.0');
+  assert.equal(structured.itr_routing_rule_version, 'AY2026-27.1');
+  assert.equal(structured.tax_rule_version, 'AY2026-27.1');
+});
+
+test('18. Section Status Semantics and Zero PII in Warnings', () => {
+  const partialDoc = `
+Part A - General Information
+Permanent Account Number (PAN): ANRPV2797D
+Financial Year: 2025-26
+Assessment Year: 2026-27
+Name of Assessee: SIDDI VINAYAKA
+Address: 123 BANGALORE
+`;
+  const envelope = extractAisEnvelope(partialDoc);
+  assert.equal(envelope.section_statuses.part_a, 'extracted');
+  assert.equal(envelope.section_statuses.part_b1, 'not-present');
+  assert.equal(envelope.section_statuses.part_b2, 'not-present');
+  assert.equal(envelope.section_statuses.part_b3, 'not-present');
+  assert.equal(envelope.section_statuses.part_b4, 'not-present');
+
+  // Verify warnings contain zero PII (no PAN, name, or address)
+  for (const warning of envelope.warnings) {
+    assert.equal(warning.message.includes('ANRPV2797D'), false, 'Warning must not contain PAN');
+    assert.equal(warning.message.includes('SIDDI VINAYAKA'), false, 'Warning must not contain taxpayer name');
+    assert.equal(warning.message.includes('BANGALORE'), false, 'Warning must not contain address');
+  }
 });

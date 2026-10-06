@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/extractor.test.ts",
+    "test": "tsx tests/extractor/ais-extractor.spec.ts && tsx tests/integration/ais-classification.spec.ts",
     "lint": "eslint src/ index.html",
     "lint:fix": "eslint src/ index.html --fix",
     "stylelint": "stylelint 'src/**/*.{css,scss}'",

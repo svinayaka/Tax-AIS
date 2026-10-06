@@ -15,8 +15,8 @@ Current Scope
 Income-tax Act Transition Boundary
 The currently implemented ITR-classification and tax-calculation rules in Tax-AIS are versioned for Assessment Year 2026-27 under the Income-tax Act, 1961, corresponding to income earned during Financial Year 2025-26.
 From 1 April 2026, the Income-tax Act, 2025 introduces the concept of Tax Year and discontinues the Assessment Year concept for Tax Year 2026-27 onwards.
-Form No. 168 under the Income-tax Rules, 2026 is the Annual Information Statement for the new Tax-Year framework and uses Tax Year rather than Assessment Year.
-Support for Form 168 / Tax Year 2026-27 documents is provided in canonical compatibility mode (mapping Tax Year (T.Y.) 2026-27 into the canonical AY 2026-27 / FY 2025-26 schema) with an explicit FORM_168_FUTURE_MODE statutory warning emitted.
+Form No. 168 under the Income-tax Rules, 2026 is the Annual Information Statement for the new Tax-Year framework under the Income-tax Act, 2025 and uses Tax Year rather than Assessment Year.
+Statutory Mode Resolution: Form No. 168 represents a separate future statutory mode under the Income-tax Act, 2025. It uses tax_year and does NOT fabricate an assessment_year or financial_year. The current extraction engine does not silently route Form 168 documents through AY 2026-27 / Income-tax Act, 1961 rules; instead, it classifies the document as form_168_future, emits an explicit FORM_168_FUTURE_MODE statutory warning, and keeps the canonical ITA 1961 extraction envelope null until native ITA 2025 rules are enabled.
 2. Architectural Principles
 1. Privacy First: Sensitive taxpayer data remains strictly on the user's local device.
 2. Deterministic Extraction: Prefer rule-based, spatial, and schema-driven extraction over opaque remote inference.
@@ -49,7 +49,7 @@ The current architecture intentionally does not provide:
 - Personalized legal, accounting, or professional tax advice;
 - Tax calculations outside explicitly implemented and versioned assessment-year rule sets;
 - Complete Form 26AS support until explicitly implemented;
-- Form No. 168 / Income-tax Act, 2025 documents are extracted in canonical compatibility mode for AY 2026-27 filing; full native Tax-Year rule engines are reserved for future standalone statutory rule sets;
+- Form No. 168 / Income-tax Act, 2025 documents operate in a separate future statutory mode (using tax_year without fabricating FY/AY) and are not silently routed through AY 2026-27 / ITA 1961 extraction logic; full native Tax-Year rule engines are reserved for future standalone statutory rule sets;
 - OCR for image-only/scanned documents unless introduced through a separate architectural decision.
 [!IMPORTANT]
 
@@ -176,73 +176,61 @@ Tax-AIS/
 │   └── icons.svg               # SVG icon sprites
 
 ├── src/
-
 │   ├── components/             # Custom Elements (Stencil-like conventions)
-
 │   │   ├── ais-deductor-card.ts    # TDS/TCS deductor entity & quarterly line items
-
 │   │   ├── ais-itr-advisor.ts      # Statutory ITR form guidance & criteria checklist
-
 │   │   ├── ais-kpi-card.ts         # Metric KPI card components
-
 │   │   ├── ais-part-a.ts           # Assessee Profile & identity breakdown
-
 │   │   ├── ais-tax-calculator.ts   # Dual-regime comparison, deduction editor & tax breakdown
-
 │   │   ├── ais-tax-payment-card.ts # Part B3 Challan / BSR payment records
-
 │   │   └── index.ts                # Component registry & customElements.define guards
-
 │   ├── lib/                    # Core engines & utilities
-
-│   │   ├── dom-utils.ts        # Sanitization, escaping, and INR currency formatting
-
-│   │   ├── exporter.ts         # Multi-format exporter (JSON, CSV, Markdown)
-
-│   │   ├── extractor-client.ts # Web Worker dispatcher & resilient main-thread fallback
-
-│   │   ├── extractor.ts        # Spatial & deterministic regex extraction engine
-
-│   │   ├── itr-classifier.ts   # Statutory ITR-1 vs ITR-2/3/4 classification rules
-
-│   │   ├── pdf-parser.ts       # Mozilla PDF.js spatial coordinate reconstructor
-
-│   │   ├── storage.ts          # IndexedDB persistence with 24h TTL
-
-│   │   └── tax-calculator.ts   # AY-versioned tax regime comparison & slab computation
-
+│   │   ├── ais-rule-loader.ts      # Bundled rule loader, validation & version provider
+│   │   ├── ais-section-detector.ts # Physical Part A & Part Bn section boundary detector
+│   │   ├── dom-utils.ts            # Sanitization, escaping, and INR currency formatting
+│   │   ├── exporter.ts             # Multi-format exporter (JSON, CSV, Markdown)
+│   │   ├── extractor-client.ts     # Web Worker dispatcher & resilient main-thread fallback
+│   │   ├── extractor.ts            # Spatial & deterministic regex extraction engine
+│   │   ├── itr-classifier.ts       # Statutory ITR-1 vs ITR-2/3/4 classification rules
+│   │   ├── pdf-parser.ts           # Mozilla PDF.js spatial coordinate reconstructor
+│   │   ├── storage.ts              # IndexedDB persistence with 24h TTL
+│   │   └── tax-calculator.ts       # AY-versioned tax regime comparison & slab computation
+│   ├── rules/                  # Declarative AIS structural rules & parser routing
+│   │   ├── ais-part-a.json         # Part A metadata, boundary markers, and canonical field aliases
+│   │   └── ais-part-b.json         # Part B discovery patterns, parser routing & unknown section policies
 │   ├── workers/                # Background Web Workers (reduces main-thread processing)
-
-│   │   └── extractor.worker.ts # Off-thread extraction and ITR form classifier
-
+│   │   ├── extractor.worker.ts     # Off-thread extraction and ITR form classifier
+│   │   └── ROUTER_AGENT.md         # Statutory routing directives & classification matrix
 │   ├── types/
-
-│   │   └── ais.ts              # Canonical TypeScript contracts & schema interfaces
-
+│   │   ├── ais-rules.ts            # Strict TypeScript contracts for AIS declarative rules
+│   │   └── ais.ts                  # Canonical TypeScript contracts & schema interfaces
 │   ├── main.ts                 # Orchestrator, theme manager, file ingestion, storage init
-
 │   └── style.scss              # Styling & tokens (@svinayaka/siddi-design-system)
 
+├── tests/                      # Automated test suite & statutory fixtures
+│   ├── fixtures/               # Statutory PDF documents & expected JSON contracts
+│   │   └── ais/
+│   │       ├── itr1/           # ITR-1 baseline PDF & expected extraction
+│   │       │   ├── ais-itr1-basic.pdf
+│   │       │   └── expected.json
+│   │       └── itr2/           # ITR-2 capital gain signal PDF & expected extraction
+│   │           ├── ais-itr2-capital-gain-signal.pdf
+│   │           └── expected.json
+│   ├── extractor/              # Deterministic rule & extractor unit specifications
+│   │   └── ais-extractor.spec.ts
+│   └── integration/            # End-to-end PDF extraction & ITR classification tests
+│       └── ais-classification.spec.ts
+
 ├── eslint.config.js            # ESLint flat config with TypeScript + SonarJS
-
 ├── .lintstagedrc.json          # Staged-file pre-commit lint configuration
-
 ├── .npmrc                      # GitHub Packages scoped registry auth configuration
-
 ├── stylelint.config.js         # Stylelint configuration extending standard CSS rules
-
 ├── AGENTS.md                   # Developer & AI Agent contribution guidelines
-
 ├── ARCHITECTURE.md             # System architecture documentation
-
 ├── index.html                  # Single-page application shell
-
 ├── netlify.toml                # Netlify build, SPA routing & security headers
-
 ├── package.json                # Project dependencies, scripts, and quality gates
-
 ├── sonar-project.properties    # SonarQube / SonarCloud configuration
-
 └── tsconfig.json               # Strict TypeScript compiler configuration
 
 If the repository structure changes, this tree and [`AGENTS.md`](./AGENTS.md) must be updated together.
@@ -295,7 +283,48 @@ export interface TextItem {
 }
 
 Implementation-specific thresholds may evolve. The architecture requires stable spatial reconstruction behavior, not a permanently fixed numeric threshold.
-10. Extraction & Normalization (src/lib/extractor.ts)
+
+10. AIS Rule Configuration Layer
+
+The AIS Rule Configuration Layer introduces a machine-readable rule architecture separating document-structure declarations and parser routing from low-level parsing algorithms.
+
+Architectural Hierarchy & Flow:
+
+ARCHITECTURE.md
+    ↓
+bundled AIS rule JSON (src/rules/ais-part-a.json, src/rules/ais-part-b.json)
+    ↓
+typed rule loader (src/lib/ais-rule-loader.ts)
+    ↓
+section detector (src/lib/ais-section-detector.ts)
+    ↓
+parser registry (AIS_PARSER_REGISTRY in src/lib/extractor.ts)
+    ↓
+extractor (src/lib/extractor.ts)
+    ↓
+canonical AisDeveloperSchema (src/types/ais.ts)
+
+Architectural Division of Responsibilities:
+1. ARCHITECTURE.md defines architectural contracts, trust boundaries, statutory invariants, and security constraints.
+2. Rule JSON (src/rules/ais-part-a.json, src/rules/ais-part-b.json) defines machine-readable AIS document structure, labels, aliases, section start/end markers, parser-routing metadata, deductor isolation rules, and supported/unsupported policies.
+3. TypeScript implements concrete parsing algorithms, spatial extraction routines, and regex tokenization engines.
+4. src/types/ais.ts defines canonical extracted-data contracts (AisDeveloperSchema, StructuredExtractionResult).
+5. Zero Executable Code in Rules: Rule JSON must never contain executable JavaScript, scripts, or function definitions.
+6. Static Parser Registry: Dynamic execution (eval, new Function, or dynamic execution of parser names) is strictly prohibited. The rule JSON references only closed, strongly typed parser IDs ('partA' | 'partB1' | 'partB2' | 'partB3' | 'partB4') mapped to static TypeScript functions via AIS_PARSER_REGISTRY.
+7. Safe Rule Loading (src/lib/ais-rule-loader.ts):
+   - Synchronously loads and validates bundled rule files at application startup;
+   - Fails safely with explicit application errors on malformed rule configuration;
+   - Never falls back to fabricated defaults;
+   - Never fetches rules remotely (100% in-browser guarantee);
+   - Never logs taxpayer data.
+8. Physical Section Boundary Detection (src/lib/ais-section-detector.ts):
+   - Scans document text for Part A start/end markers;
+   - Discovers all numbered Part Bn sections matching the rule pattern equivalent to Part B([0-9]+);
+   - Distinguishes known + supported sections (B1, B2, B3, B4), known + unsupported sections, and unknown sections (e.g. Part B7);
+   - Preserves unknown or annexure sections as structural metadata with status 'unsupported' (unknownSectionPolicy: 'preserve-as-unsupported');
+   - Prevents unrouted sections from ever contaminating B1–B4 parsers.
+
+11. Extraction & Normalization (src/lib/extractor.ts)
 10.1 Document Classification
 Supported document classes remain intentionally narrow:
 - AIS
@@ -672,9 +701,9 @@ Financial Year vs Assessment Year:
 
 Statutory Period & Future Form 168 Year Model:
 
-The current schema (financial_year and assessment_year) is appropriate for the current Income-tax Act, 1961 assessment-year-based implementation.
+The current schema (financial_year and assessment_year) is strictly for the Income-tax Act, 1961 assessment-year-based implementation.
 
-Future Form No. 168 support under the Income-tax Act, 2025 must not fabricate an assessment_year, because the Income-tax Act, 2025 discontinues that concept.
+Form No. 168 under the Income-tax Act, 2025 represents a separate future statutory mode using tax_year, and must not fabricate financial_year or assessment_year, because the Income-tax Act, 2025 discontinues the assessment year framework. Form 168 documents emit an explicit FORM_168_FUTURE_MODE statutory warning and do not silently route through AY 2026-27 logic.
 
 A future versioned architecture contract may model statutory periods as:
 
@@ -734,13 +763,15 @@ interface StructuredExtractionResult {
 
   schema_version: '1.0';
 
+  extraction_rules_version: string;
+
   itr_routing_rule_version: string;
 
   tax_rule_version: string;
 
   document_type: 'AIS' | 'FORM_26AS';
 
-  extraction: AisDeveloperSchema;
+  extraction: AisDeveloperSchema | null;
 
 
   section_statuses: {
