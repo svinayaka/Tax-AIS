@@ -33,9 +33,9 @@ export class AisDeductorCard extends HTMLElement {
     this.innerHTML = `
       <div class="ais-deductor-header">
         <div>
-          <div class="ais-deductor-name">${escapeHtml(d?.information_source || 'Deductor Entity')}</div>
+          <div class="ais-deductor-name">${escapeHtml(d?.information_source || 'Unknown Deductor')}</div>
           <div class="ais-deductor-meta">
-            <strong>Code:</strong> ${escapeHtml(d?.information_code || 'TDS')} &bull; ${escapeHtml(d?.information_description || '')}
+            <strong>Code:</strong> ${escapeHtml(d?.information_code || '—')} &bull; ${escapeHtml(d?.information_description || '')}
           </div>
         </div>
         <div class="ais-deductor-metrics">
@@ -71,8 +71,8 @@ export class AisDeductorCard extends HTMLElement {
                 <td style="color:var(--ksv-ds-status-warning-icon);">${formatInr(item.tds_deducted)}</td>
                 <td style="color:var(--ksv-ds-status-success-icon);">${formatInr(item.tds_deposited)}</td>
                 <td>
-                  <span class="status-pill-active">
-                    <i data-lucide="check-circle-2" class="btn-icon-xs"></i>
+                  <span class="${item.status?.toLowerCase() === 'inactive' ? 'status-pill-inactive' : 'status-pill-active'}">
+                    <i data-lucide="${item.status?.toLowerCase() === 'inactive' ? 'circle-dashed' : 'check-circle-2'}" class="btn-icon-xs"></i>
                     ${escapeHtml(item.status || 'Active')}
                   </span>
                 </td>

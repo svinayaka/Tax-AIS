@@ -3,6 +3,11 @@
  * Parses raw text streams into rich, categorized, structured JSON objects
  */
 
+import {
+  SCHEMA_VERSION,
+  ITR_ROUTING_RULE_VERSION,
+  TAX_RULE_VERSION
+} from '../types/ais';
 import type {
   StructuredExtractionResult,
   DocumentClassification,
@@ -17,7 +22,10 @@ import type {
   PartB2SftTransaction,
   PartB3TaxPayment,
   PartB4DemandRefund,
-  VerifiedAisContract
+  VerifiedAisContract,
+  ExtractionStatus,
+  ExtractionWarning,
+  SectionStatuses
 } from '../types/ais';
 
 export function extractStructuredData(rawText: string, customFields: string[] = []): StructuredExtractionResult {
@@ -59,16 +67,47 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
   const durationMs = Math.round(performance.now() - startTime);
   const confidenceScore = calculateOverallConfidence(keyValues, entities, tables);
 
-  // 9. AIS Deterministic extraction if document matches Indian Tax AIS / Form 26AS
-  const isAis = docClassification.type === 'ais' || 
-                cleanedText.toLowerCase().includes('annual information statement') || 
-                cleanedText.toLowerCase().includes('form 26as') || 
-                (cleanedText.toLowerCase().includes('assessee') && cleanedText.toLowerCase().includes('tds'));
-  
-  const aisJson = isAis ? extractAisDeterministicJson(cleanedText) : null;
+  // 9. AIS Deterministic extraction if document matches Indian Tax AIS
+  const lowerText = cleanedText.toLowerCase();
+  const isForm168Future = lowerText.includes('form 168') || lowerText.includes('form no. 168') || lowerText.includes('form no 168');
+  const isAis = !isForm168Future && (
+    docClassification.type === 'ais' ||
+    lowerText.includes('annual information statement') ||
+    (lowerText.includes('assessee') && lowerText.includes('tds') && lowerText.includes('part a'))
+  );
+
+  let extraction: AisDeveloperSchema | null = null;
+  let sectionStatuses: SectionStatuses = {
+    part_a: 'not-present',
+    part_b1: 'not-present',
+    part_b2: 'not-present',
+    part_b3: 'not-present',
+    part_b4: 'not-present'
+  };
+  let warnings: ExtractionWarning[] = [];
+
+  if (isForm168Future) {
+    warnings.push({
+      code: 'FORM_168_FUTURE_MODE',
+      section: 'A',
+      message: 'Form No. 168 under Income-tax Act, 2025 is a future statutory format and is not routed through AY 2026-27 rules.'
+    });
+  } else if (isAis) {
+    const envelope = extractAisEnvelope(cleanedText);
+    extraction = envelope.schema;
+    sectionStatuses = envelope.section_statuses;
+    warnings = envelope.warnings;
+  }
 
   // Assemble full structured output
   return {
+    schema_version: SCHEMA_VERSION,
+    itr_routing_rule_version: ITR_ROUTING_RULE_VERSION,
+    tax_rule_version: TAX_RULE_VERSION,
+    document_type: docClassification.type === 'form_26as' ? 'FORM_26AS' : 'AIS',
+    extraction,
+    section_statuses: sectionStatuses,
+    warnings,
     documentClassification: docClassification,
     summary,
     metadata: {
@@ -85,7 +124,7 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
     tables,
     sections,
     customFieldResults,
-    aisJson
+    aisJson: extraction
   };
 }
 
@@ -104,6 +143,19 @@ function cleanText(text: string): string {
 
 function createEmptyResult(): StructuredExtractionResult {
   return {
+    schema_version: SCHEMA_VERSION,
+    itr_routing_rule_version: ITR_ROUTING_RULE_VERSION,
+    tax_rule_version: TAX_RULE_VERSION,
+    document_type: 'AIS',
+    extraction: null,
+    section_statuses: {
+      part_a: 'not-present',
+      part_b1: 'not-present',
+      part_b2: 'not-present',
+      part_b3: 'not-present',
+      part_b4: 'not-present'
+    },
+    warnings: [],
     documentClassification: {
       type: 'unknown',
       confidence: 'low',
@@ -125,9 +177,10 @@ function createEmptyResult(): StructuredExtractionResult {
 }
 
 const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: number }> = [
+  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 15 },
+  { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'annual tax statement under section 203aa'], score: 15 },
   { type: 'ais', keywords: ['annual information statement'], score: 5 },
-  { type: 'ais', keywords: ['form 168', 'form 26as'], score: 5 },
-  { type: 'ais', keywords: ['income tax department'], score: 4 },
+  { type: 'ais', keywords: ['income tax department', 'income-tax department'], score: 4 },
   { type: 'ais', keywords: ['part a', 'part b'], score: 4 },
   { type: 'ais', keywords: ['tax deducted or collected at source', 'tds'], score: 3 },
   { type: 'ais', keywords: ['assessee', 'permanent account number'], score: 3 },
@@ -141,7 +194,15 @@ const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: 
 ];
 
 function scoreDocument(lowerText: string): Record<string, number> {
-  const scores: Record<string, number> = { ais: 0, invoice: 0, resume: 0, medical: 0, financial: 0 };
+  const scores: Record<string, number> = {
+    form_168_future: 0,
+    form_26as: 0,
+    ais: 0,
+    invoice: 0,
+    resume: 0,
+    medical: 0,
+    financial: 0
+  };
   for (const rule of CLASSIFICATION_KEYWORDS) {
     if (rule.keywords.some(kw => lowerText.includes(kw))) {
       scores[rule.type] = (scores[rule.type] || 0) + rule.score;
@@ -153,7 +214,7 @@ function scoreDocument(lowerText: string): Record<string, number> {
 /**
  * Classify document using keyword clustering
  */
-function classifyDocument(text: string): DocumentClassification {
+export function classifyDocument(text: string): DocumentClassification {
   const lower = text.toLowerCase();
   const scores = scoreDocument(lower);
 
@@ -168,7 +229,9 @@ function classifyDocument(text: string): DocumentClassification {
   }
 
   const typeConfig: Record<string, { title: string; icon: string; color: string }> = {
-    ais: { title: 'Annual Information Statement (AIS - Form 168)', icon: 'file-text', color: 'var(--ksv-ds-color-indigo-500)' },
+    ais: { title: 'Annual Information Statement (AIS)', icon: 'file-text', color: 'var(--ksv-ds-color-indigo-500)' },
+    form_26as: { title: 'Form 26AS (Tax Credit Statement)', icon: 'file-text', color: 'var(--ksv-ds-color-sky-500)' },
+    form_168_future: { title: 'Form No. 168 (Income-tax Act, 2025 - Future Mode)', icon: 'file-text', color: 'var(--ksv-ds-color-purple-500)' },
     invoice: { title: 'Invoice / Commercial Bill', icon: 'receipt', color: 'var(--ksv-ds-color-sky-500)' },
     resume: { title: 'Resume / Curriculum Vitae', icon: 'user-check', color: 'var(--ksv-ds-color-emerald-500)' },
     medical: { title: 'Clinical Diagnostic Report', icon: 'activity', color: 'var(--ksv-ds-color-rose-500)' },
@@ -192,6 +255,10 @@ function classifyDocument(text: string): DocumentClassification {
     icon: info.icon,
     themeColor: info.color
   };
+}
+
+export function classifyDocumentType(text: string): string {
+  return classifyDocument(text).type;
 }
 
 
@@ -430,7 +497,11 @@ function generateSummary(
   let overview = `Extracted ${docClassification.label} containing ${keyValues.length} key fields, ${entities.monetaryAmounts.length} monetary figures, and ${entities.dates.length} timeline milestones.`;
 
   if (docClassification.type === 'ais') {
-    overview = `Official Indian Income Tax Annual Information Statement (AIS - Form 168). Details assessee profile (Part A) and tax deducted, SFT, and challan payments (Part B).`;
+    overview = `Official Indian Income Tax Annual Information Statement (AIS). Details assessee profile (Part A) and tax deducted, SFT, and challan payments (Part B).`;
+  } else if (docClassification.type === 'form_26as') {
+    overview = `Official Indian Income Tax Form 26AS Tax Credit Statement. Details tax deducted at source, tax collected, and advance tax payments.`;
+  } else if (docClassification.type === 'form_168_future') {
+    overview = `Form No. 168 under Income-tax Act, 2025 (Future Mode).`;
   } else if (docClassification.type === 'invoice') {
     overview = `Commercial invoice document detailing billing breakdown, line items, and transaction balance.`;
   }
@@ -467,7 +538,7 @@ function findCustomFieldValue(field: string, text: string, keyValues: KeyValuePa
 }
 
 // ==========================================================================
-// Specialized AIS / Form 168 Deterministic Parser & Sanitizer
+// Specialized AIS Deterministic Parser & Sanitizer (Income-tax Act, 1961)
 // ==========================================================================
 
 function parseNum(val: unknown): number {
@@ -478,11 +549,98 @@ function parseNum(val: unknown): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function extractTaxYear(text: string): string {
-  const tyMatch = text.match(/(?:Tax\s+Year\s*\(T\.Y\.\)|Assessment\s+Year|AY|Tax\s+Year)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ??
-                  text.match(/(?:Financial\s+Year|FY)\s*[:=-]?\s*(\d{4}-\d{2,4})/i) ??
-                  text.match(/\b(\d{4}-\d{2})\b/);
-  return tyMatch ? tyMatch[1].trim() : '2026-27';
+function normalizeYearRange(raw: string): string {
+  const m = raw.trim().match(/^(\d{4})-(\d{2,4})$/);
+  if (!m) return '';
+  const start = m[1];
+  const end = m[2].length === 4 ? m[2].slice(2) : m[2];
+  return `${start}-${end}`;
+}
+
+export function deriveAyFromFy(fy: string): string {
+  const m = fy.trim().match(/^(\d{4})-(\d{2})$/);
+  if (!m) return '';
+  const start = Number.parseInt(m[1], 10);
+  const ayStart = start + 1;
+  const ayEnd = (start + 2) % 100;
+  return `${ayStart}-${String(ayEnd).padStart(2, '0')}`;
+}
+
+export function deriveFyFromAy(ay: string): string {
+  const m = ay.trim().match(/^(\d{4})-(\d{2})$/);
+  if (!m) return '';
+  const start = Number.parseInt(m[1], 10);
+  const fyStart = start - 1;
+  const fyEnd = start % 100;
+  return `${fyStart}-${String(fyEnd).padStart(2, '0')}`;
+}
+
+export function extractFinancialYear(text: string): string {
+  const match = text.match(/(?:Financial\s+Year|F\.?Y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  if (!match) return '';
+  return normalizeYearRange(match[1]);
+}
+
+export function extractAssessmentYear(text: string): string {
+  const match = text.match(/(?:Assessment\s+Year|A\.?Y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  if (!match) return '';
+  return normalizeYearRange(match[1]);
+}
+
+export function extractStatutoryPeriod(text: string): {
+  financial_year: string;
+  assessment_year: string;
+  warnings: ExtractionWarning[];
+} {
+  const warnings: ExtractionWarning[] = [];
+  let fy = extractFinancialYear(text);
+  let ay = extractAssessmentYear(text);
+
+  if (fy && ay) {
+    const expectedAy = deriveAyFromFy(fy);
+    if (expectedAy && expectedAy !== ay) {
+      warnings.push({
+        code: 'PERIOD_AMBIGUOUS',
+        section: 'A',
+        message: 'Discrepancy detected between extracted Financial Year and Assessment Year.'
+      });
+    }
+  } else if (fy && !ay) {
+    ay = deriveAyFromFy(fy);
+    if (!ay) {
+      warnings.push({
+        code: 'PERIOD_AMBIGUOUS',
+        section: 'A',
+        message: 'Could not deterministically derive Assessment Year from Financial Year.'
+      });
+    }
+  } else if (!fy && ay) {
+    fy = deriveFyFromAy(ay);
+    if (!fy) {
+      warnings.push({
+        code: 'PERIOD_AMBIGUOUS',
+        section: 'A',
+        message: 'Could not deterministically derive Financial Year from Assessment Year.'
+      });
+    }
+  } else {
+    warnings.push({
+      code: 'PERIOD_NOT_FOUND',
+      section: 'A',
+      message: 'Neither Financial Year nor Assessment Year could be identified in the document.'
+    });
+  }
+
+  return {
+    financial_year: fy,
+    assessment_year: ay,
+    warnings
+  };
+}
+
+export function extractTaxYear(text: string): string {
+  const period = extractStatutoryPeriod(text);
+  return period.assessment_year || period.financial_year || '';
 }
 
 function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
@@ -603,38 +761,89 @@ function parsePipeLineItems(lines: string[]): PartB1LineItem[] {
   return allLineItems;
 }
 
-function extractDeductorsFromPipes(lines: string[], allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
-  const partB1: PartB1TdsTcsTransaction[] = [];
-  lines.forEach(line => {
-    if (line.includes('|') && (line.includes('TDS-') || line.includes('TCS-') || line.includes('Sec 19') || /\([a-z]{4}\d{5}[a-z]\)/i.test(line))) {
-      const parts = line.split('|').map(p => p.trim());
-      if (parts.length >= 6 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('information code')) {
-        const count = Number.parseInt(parts[4], 10) || 3;
-        const deductorLineItems = allLineItems.splice(0, count);
-        const { code, desc } = cleanCodeAndDesc(parts[1], parts[2]);
+function isDeductorPipeSummaryLine(line: string): boolean {
+  if (!line.includes('|')) return false;
+  const lower = line.toLowerCase();
+  if (lower.includes('sr') || lower.includes('information code')) return false;
+  return line.includes('TDS-') || line.includes('TCS-') || line.includes('Sec 19') || /\([a-z]{4}\d{5}[a-z]\)/i.test(line);
+}
 
-        partB1.push({
-          sr_no: Number.parseInt(parts[0], 10) || (partB1.length + 1),
-          information_code: code,
-          information_description: desc,
-          information_source: parts[3] || '',
-          total_amount_credited: parseNum(parts[5]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
-          line_items: deductorLineItems
-        });
+function extractDeductorsFromPipes(lines: string[], warnings: ExtractionWarning[]): PartB1TdsTcsTransaction[] {
+  const partB1: PartB1TdsTcsTransaction[] = [];
+  const summaryLineIndices: number[] = [];
+
+  lines.forEach((line, idx) => {
+    if (isDeductorPipeSummaryLine(line)) {
+      const parts = line.split('|').map(p => p.trim());
+      if (parts.length >= 6) {
+        summaryLineIndices.push(idx);
       }
     }
   });
+
+  if (summaryLineIndices.length === 0) {
+    return partB1;
+  }
+
+  summaryLineIndices.forEach((lineIdx, i) => {
+    const parts = lines[lineIdx].split('|').map(p => p.trim());
+    const { code, desc } = cleanCodeAndDesc(parts[1], parts[2]);
+    if (code.toUpperCase().startsWith('TDS-ANN')) {
+      return;
+    }
+
+    const nextLineIdx = i + 1 < summaryLineIndices.length ? summaryLineIndices[i + 1] : lines.length;
+    const blockLines = lines.slice(lineIdx + 1, nextLineIdx);
+
+    const deductorLineItems = parsePipeLineItems(blockLines);
+    if (deductorLineItems.length === 0) {
+      warnings.push({
+        code: 'B1_SUMMARY_WITHOUT_DETAILS',
+        section: 'B1',
+        message: 'Deductor summary record found without parseable detail rows.'
+      });
+    }
+
+    partB1.push({
+      sr_no: Number.parseInt(parts[0], 10) || (partB1.length + 1),
+      information_code: code,
+      information_description: desc,
+      information_source: parts[3] || '',
+      total_amount_credited: parseNum(parts[5]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
+      line_items: deductorLineItems
+    });
+  });
+
   return partB1;
 }
 
-function extractDeductorsFromRegex(text: string, allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
+function extractDeductorsFromRegex(text: string, warnings: ExtractionWarning[]): PartB1TdsTcsTransaction[] {
   const partB1: PartB1TdsTcsTransaction[] = [];
-  const deductorBlockRegex = /(?:(\d+)\s+)?(TDS-[^\s]+|TCS-[^\s]+|TDS-[a-z0-9()/:.[\]-]+)\s+(.+?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
-  let dMatch: RegExpExecArray | null;
-  while ((dMatch = deductorBlockRegex.exec(text)) !== null) {
-    const count = Number.parseInt(dMatch[5], 10) || 3;
-    const deductorLineItems = allLineItems.splice(0, count);
+  const deductorBlockRegex = /(?:(\d+)\s+)?(T[DC]S-[^\s]+)\s+([a-z0-9\s()/:.[\]-]{2,120}?)\s+([a-z0-9\s.,&/-]+?\((?:[a-z]{4}\d{5}[a-z])\))\s+(\d+)\s+([\d,.]+)/gi;
+  const matches = [...text.matchAll(deductorBlockRegex)];
+
+  if (matches.length === 0) {
+    return partB1;
+  }
+
+  matches.forEach((dMatch, idx) => {
     const { code, desc } = cleanCodeAndDesc(dMatch[2], dMatch[3]);
+    if (code.toUpperCase().startsWith('TDS-ANN')) {
+      return;
+    }
+
+    const matchEnd = (dMatch.index ?? 0) + dMatch[0].length;
+    const nextMatchStart = idx + 1 < matches.length ? (matches[idx + 1].index ?? text.length) : text.length;
+    const blockText = text.slice(matchEnd, nextMatchStart);
+
+    const deductorLineItems = parseRegexLineItems(blockText);
+    if (deductorLineItems.length === 0) {
+      warnings.push({
+        code: 'B1_SUMMARY_WITHOUT_DETAILS',
+        section: 'B1',
+        message: 'Deductor summary record found without parseable detail rows.'
+      });
+    }
 
     partB1.push({
       sr_no: dMatch[1] ? Number.parseInt(dMatch[1], 10) : (partB1.length + 1),
@@ -644,80 +853,221 @@ function extractDeductorsFromRegex(text: string, allLineItems: PartB1LineItem[])
       total_amount_credited: parseNum(dMatch[6]) || deductorLineItems.reduce((acc, l) => acc + l.amount_paid_credited, 0),
       line_items: deductorLineItems
     });
-  }
-  return partB1;
-}
-
-function extractDeductorsFromTan(text: string, allLineItems: PartB1LineItem[]): PartB1TdsTcsTransaction[] {
-  const partB1: PartB1TdsTcsTransaction[] = [];
-  const tanRegex = /([a-z0-9\s.,&-]+?\(([a-z]{4}\d{5}[a-z])\))/gi;
-  const tanMatches = [...text.matchAll(tanRegex)];
-  if (tanMatches.length === 0) return partB1;
-
-  const uniqueSources = [...new Set(tanMatches.map(m => m[1].trim()))];
-  const itemsPerSource = Math.ceil(allLineItems.length / uniqueSources.length) || 1;
-
-  uniqueSources.forEach((src, idx) => {
-    const deductorLineItems = allLineItems.splice(0, itemsPerSource);
-    const totalCred = deductorLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
-
-    partB1.push({
-      sr_no: idx + 1,
-      information_code: 'TDS-194A',
-      information_description: 'Interest received on securities / TDS Transaction',
-      information_source: src,
-      total_amount_credited: totalCred,
-      line_items: deductorLineItems
-    });
   });
+
   return partB1;
 }
 
-function extractPartB1Transactions(text: string, lines: string[]): PartB1TdsTcsTransaction[] {
-  let allLineItems = parseRegexLineItems(text);
-  if (allLineItems.length === 0) {
-    allLineItems = parsePipeLineItems(lines);
+export function extractPartB1Section(text: string): string {
+  const startMatch = /Part\s+B1[\s-]*Information\s+relating\s+to\s+tax\s+deducted\s+or\s+collected\s+at\s+source/i.exec(text)
+    ?? /Part\s+B1\b/i.exec(text);
+
+  if (!startMatch) {
+    return '';
   }
 
-  let partB1 = extractDeductorsFromPipes(lines, allLineItems);
-  if (partB1.length === 0) {
-    partB1 = extractDeductorsFromRegex(text, allLineItems);
+  const start = startMatch.index;
+  const remaining = text.slice(start);
+
+  const afterHeader = remaining.slice(startMatch[0].length);
+  const endMatch = /Part\s+B[2-9][\s-]*Information/i.exec(afterHeader)
+    ?? /Part\s+B[2-9]\b/i.exec(afterHeader);
+
+  if (!endMatch) {
+    return remaining;
   }
-  if (partB1.length === 0) {
-    partB1 = extractDeductorsFromTan(text, allLineItems);
+
+  return remaining.slice(0, startMatch[0].length + endMatch.index);
+}
+
+export function extractPartB1Transactions(
+  text: string,
+  _lines: string[] = [],
+  warnings: ExtractionWarning[] = []
+): { transactions: PartB1TdsTcsTransaction[]; status: ExtractionStatus } {
+  const scopedText = extractPartB1Section(text);
+  if (!scopedText) {
+    warnings.push({
+      code: 'B1_SECTION_NOT_FOUND',
+      section: 'B1',
+      message: 'Part B1 section boundary could not be established.'
+    });
+    return { transactions: [], status: 'not-present' };
   }
-  if (partB1.length === 0 && allLineItems.length > 0) {
-    const totalCred = allLineItems.reduce((acc, item) => acc + item.amount_paid_credited, 0);
-    partB1.push({
-      sr_no: 1,
-      information_code: 'TDS',
-      information_description: 'Tax Deducted at Source',
-      information_source: 'Deductor Entity',
-      total_amount_credited: totalCred,
-      line_items: allLineItems
+
+  const scopedLines = scopedText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  let partB1 = extractDeductorsFromPipes(scopedLines, warnings);
+  if (partB1.length === 0) {
+    partB1 = extractDeductorsFromRegex(scopedText, warnings);
+  }
+
+  // Filter out any TDS-ANN summaries defensive check
+  partB1 = partB1.filter(txn => !txn.information_code.trim().toUpperCase().startsWith('TDS-ANN'));
+
+  if (partB1.length === 0) {
+    warnings.push({
+      code: 'B1_BLOCK_PARSE_FAILED',
+      section: 'B1',
+      message: 'Part B1 section found but deductor records could not be parsed.'
+    });
+    return { transactions: [], status: 'failed' };
+  }
+
+  return { transactions: partB1, status: 'extracted' };
+}
+
+export function extractPartB2Section(text: string): string {
+  const startMatch = /Part\s+B2[\s-]*Information\s+relating\s+to\s+specified\s+financial\s+transaction/i.exec(text)
+    ?? /Part\s+B2\b/i.exec(text);
+
+  if (!startMatch) {
+    return '';
+  }
+
+  const start = startMatch.index;
+  const remaining = text.slice(start);
+  const afterHeader = remaining.slice(startMatch[0].length);
+  const endMatch = /Part\s+B[13-9][\s-]*Information/i.exec(afterHeader)
+    ?? /Part\s+B[13-9]\b/i.exec(afterHeader);
+
+  if (!endMatch) {
+    return remaining;
+  }
+
+  return remaining.slice(0, startMatch[0].length + endMatch.index);
+}
+
+export function extractPartB3Section(text: string): string {
+  const startMatch = /Part\s+B3[\s-]*Information\s+relating\s+to\s+payment\s+of\s+taxes/i.exec(text)
+    ?? /Part\s+B3\b/i.exec(text);
+
+  if (!startMatch) {
+    return '';
+  }
+
+  const start = startMatch.index;
+  const remaining = text.slice(start);
+  const afterHeader = remaining.slice(startMatch[0].length);
+  const endMatch = /Part\s+B[124-9][\s-]*Information/i.exec(afterHeader)
+    ?? /Part\s+B[124-9]\b/i.exec(afterHeader);
+
+  if (!endMatch) {
+    return remaining;
+  }
+
+  return remaining.slice(0, startMatch[0].length + endMatch.index);
+}
+
+export function extractPartB4Section(text: string): string {
+  const startMatch = /Part\s+B4[\s-]*Information\s+relating\s+to\s+demand\s+and\s+refund/i.exec(text)
+    ?? /Part\s+B4\b/i.exec(text);
+
+  if (!startMatch) {
+    return '';
+  }
+
+  const start = startMatch.index;
+  const remaining = text.slice(start);
+  const afterHeader = remaining.slice(startMatch[0].length);
+  const endMatch = /Part\s+B[1-35-9][\s-]*Information/i.exec(afterHeader)
+    ?? /Part\s+B[1-35-9]\b/i.exec(afterHeader);
+
+  if (!endMatch) {
+    return remaining;
+  }
+
+  return remaining.slice(0, startMatch[0].length + endMatch.index);
+}
+
+function findDateInSubsequentLines(lines: string[], startIndex: number): string {
+  for (let j = startIndex; j < lines.length; j++) {
+    if (/^(?:\d+\s+)?sft-[a-z0-9_.-]+/i.test(lines[j])) {
+      break;
+    }
+    const dateMatch = lines[j].match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/);
+    if (dateMatch) {
+      return dateMatch[1];
+    }
+  }
+  return '';
+}
+
+export function extractPartB2SftTransactions(
+  text: string,
+  _warnings: ExtractionWarning[] = []
+): { transactions: PartB2SftTransaction[]; status: ExtractionStatus } {
+  const scopedText = extractPartB2Section(text);
+  if (!scopedText) {
+    return { transactions: [], status: 'not-present' };
+  }
+
+  const partB2: PartB2SftTransaction[] = [];
+  const lines = scopedText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const sftSummaryRegex = /^(?:(\d+)\s+)?(SFT-[a-z0-9_.-]+)\s+([a-z0-9\s()/-]{2,100}?)\s+([a-z0-9\s.,&/()_-]+?\([a-z0-9._-]+\)|[a-z0-9\s.,&/_-]{2,80})\s+(\d+)\s+([\d,.]+)$/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const match = line.match(sftSummaryRegex);
+    if (match) {
+      const code = match[2].trim();
+      const desc = match[3].trim();
+      const source = match[4].trim();
+      const amount = parseNum(match[6]);
+      const txDate = findDateInSubsequentLines(lines, i + 1);
+
+      partB2.push({
+        sr_no: partB2.length + 1,
+        information_code: code,
+        information_description: desc,
+        information_source: source,
+        amount,
+        transaction_date: txDate
+      });
+    }
+  }
+
+  if (partB2.length === 0) {
+    lines.forEach(line => {
+      if (line.includes('|') && line.includes('SFT-')) {
+        const parts = line.split('|').map(p => p.trim());
+        if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr')) {
+          partB2.push({
+            sr_no: Number.parseInt(parts[0], 10) || (partB2.length + 1),
+            information_code: parts[1] || '',
+            information_description: parts[2] || '',
+            information_source: parts[3] || '',
+            amount: parseNum(parts[4]),
+            transaction_date: parts[5] || ''
+          });
+        }
+      }
     });
   }
 
-  return partB1;
+  const status: ExtractionStatus = partB2.length > 0 ? 'extracted' : 'not-present';
+  return { transactions: partB2, status };
 }
 
 function parseTaxPaymentMinorHead(rawHead: string): string {
   const lower = rawHead.toLowerCase();
   if (lower.includes('advance')) return 'Advance Tax';
   if (lower.includes('regular')) return 'Regular Assessment';
-  return 'Self Assessment';
+  if (lower.includes('self assessment') || lower.includes('self-assessment')) return 'Self Assessment';
+  return rawHead.trim();
 }
 
 function extractTaxPaymentsFromPipes(lines: string[]): PartB3TaxPayment[] {
   const partB3: PartB3TaxPayment[] = [];
   lines.forEach(line => {
-    if (line.includes('|') && (line.toLowerCase().includes('income tax') || line.toLowerCase().includes('self assessment') || /\d{7}/.test(line))) {
+    if (line.includes('|') && (line.toLowerCase().includes('income tax') || line.toLowerCase().includes('assessment') || /\d{7}/.test(line))) {
       const parts = line.split('|').map(p => p.trim());
       if (parts.length >= 8 && !parts[0].toLowerCase().includes('sr') && !parts[1].toLowerCase().includes('financial year')) {
         partB3.push({
           financial_year: parts[1] || '',
-          major_head: parts[2] || 'Income Tax (Other than Companies)',
-          minor_head: parts[3] || 'Self Assessment',
+          major_head: parts[2] || '',
+          minor_head: parseTaxPaymentMinorHead(parts[3] || ''),
           tax_amount: parseNum(parts[4]),
           total_challan_amount: parseNum(parts[8] || parts[4]),
           bsr_code: parts[9] || '',
@@ -737,89 +1087,50 @@ function extractTaxPaymentsFromRegex(text: string): PartB3TaxPayment[] {
   while ((b3Match = b3Regex.exec(text)) !== null) {
     partB3.push({
       financial_year: b3Match[2],
-      major_head: 'Income Tax (Other than Companies)',
-      minor_head: parseTaxPaymentMinorHead(b3Match[3]),
+      major_head: b3Match[3]?.trim() || '',
+      minor_head: parseTaxPaymentMinorHead(b3Match[3] || ''),
       tax_amount: parseNum(b3Match[4]),
       total_challan_amount: parseNum(b3Match[5]),
       bsr_code: b3Match[6],
       date_of_deposit: b3Match[7],
-      challan_serial_number: Number.parseInt(b3Match[8], 10)
+      challan_serial_number: Number.parseInt(b3Match[8], 10) || 0
     });
   }
   return partB3;
 }
 
-function extractTaxPaymentsFallback(text: string): PartB3TaxPayment[] {
-  const partB3: PartB3TaxPayment[] = [];
-  const fallbackRegex = /(\d{4}-\d{2})[^\n\r\d]{1,60}?([\d,.]+)[^\n\r]{0,60}?(\d{7})\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s+(\d{4,7})/gi;
-  let fbMatch: RegExpExecArray | null;
-  while ((fbMatch = fallbackRegex.exec(text)) !== null) {
-    partB3.push({
-      financial_year: fbMatch[1],
-      major_head: 'Income Tax (Other than Companies)',
-      minor_head: 'Self Assessment',
-      tax_amount: parseNum(fbMatch[2]),
-      total_challan_amount: parseNum(fbMatch[2]),
-      bsr_code: fbMatch[3],
-      date_of_deposit: fbMatch[4],
-      challan_serial_number: Number.parseInt(fbMatch[5], 10)
-    });
+export function extractPartB3TaxPayments(
+  text: string,
+  _warnings: ExtractionWarning[] = []
+): { payments: PartB3TaxPayment[]; status: ExtractionStatus } {
+  const scopedText = extractPartB3Section(text);
+  if (!scopedText) {
+    return { payments: [], status: 'not-present' };
   }
-  return partB3;
+
+  const scopedLines = scopedText.split('\n').map(l => l.trim()).filter(Boolean);
+  let payments = extractTaxPaymentsFromPipes(scopedLines);
+  if (payments.length === 0) {
+    payments = extractTaxPaymentsFromRegex(scopedText);
+  }
+
+  const status: ExtractionStatus = payments.length > 0 ? 'extracted' : 'not-present';
+  return { payments, status };
 }
 
-function extractPartB3TaxPayments(text: string, lines: string[]): PartB3TaxPayment[] {
-  let partB3 = extractTaxPaymentsFromPipes(lines);
-  if (partB3.length === 0) {
-    partB3 = extractTaxPaymentsFromRegex(text);
-  }
-  if (partB3.length === 0) {
-    partB3 = extractTaxPaymentsFallback(text);
-  }
-  return partB3;
-}
-
-function extractPartB2SftTransactions(text: string, lines: string[]): PartB2SftTransaction[] {
-  const partB2: PartB2SftTransaction[] = [];
-  const sftRegex = /(SFT-\d{1,4}[a-z0-9()/:.[\]-]*)\s+([a-z0-9\s()/-]{2,80}?)\s+([a-z0-9\s.,&/-]{2,80}?)\s+([\d,.]+)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/gi;
-  let match: RegExpExecArray | null;
-  while ((match = sftRegex.exec(text)) !== null) {
-    partB2.push({
-      sr_no: partB2.length + 1,
-      information_code: match[1].trim(),
-      information_description: match[2].trim(),
-      information_source: match[3].trim(),
-      amount: parseNum(match[4]),
-      transaction_date: match[5].trim()
-    });
+export function extractPartB4DemandRefunds(
+  text: string,
+  _warnings: ExtractionWarning[] = []
+): { refunds: PartB4DemandRefund[]; status: ExtractionStatus } {
+  const scopedText = extractPartB4Section(text);
+  if (!scopedText) {
+    return { refunds: [], status: 'not-present' };
   }
 
-  if (partB2.length === 0) {
-    lines.forEach(line => {
-      if (line.includes('|') && line.includes('SFT-')) {
-        const parts = line.split('|').map(p => p.trim());
-        if (parts.length >= 5 && !parts[0].toLowerCase().includes('sr')) {
-          partB2.push({
-            sr_no: Number.parseInt(parts[0], 10) || (partB2.length + 1),
-            information_code: parts[1] || 'SFT-005',
-            information_description: parts[2] || 'Specified Financial Transaction',
-            information_source: parts[3] || '',
-            amount: parseNum(parts[4]),
-            transaction_date: parts[5] || ''
-          });
-        }
-      }
-    });
-  }
-
-  return partB2;
-}
-
-function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4DemandRefund[] {
   const partB4: PartB4DemandRefund[] = [];
-  const drRegex = /(\d{4}-\d{2})\s+(Refund|Demand)\s+([a-z0-9\s()/-]{2,80}?)\s+([\d,.]+)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/gi;
+  const drRegex = /(?:^|\n)\s*(?:\d+\s+)?(\d{4}-\d{2})\s+([a-z0-9\s()/-]{2,40}?)\s+([a-z0-9\s()/-]{2,80}?)\s+([\d,.]+)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/gi;
   let match: RegExpExecArray | null;
-  while ((match = drRegex.exec(text)) !== null) {
+  while ((match = drRegex.exec(scopedText)) !== null) {
     partB4.push({
       sr_no: partB4.length + 1,
       financial_year: match[1].trim(),
@@ -831,6 +1142,7 @@ function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4Demand
   }
 
   if (partB4.length === 0) {
+    const lines = scopedText.split('\n').map(l => l.trim()).filter(Boolean);
     lines.forEach(line => {
       if (line.includes('|') && (line.toLowerCase().includes('refund') || line.toLowerCase().includes('demand'))) {
         const parts = line.split('|').map(p => p.trim());
@@ -838,8 +1150,8 @@ function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4Demand
           partB4.push({
             sr_no: Number.parseInt(parts[0], 10) || (partB4.length + 1),
             financial_year: parts[1] || '',
-            mode: parts[2] || 'Refund',
-            nature: parts[3] || 'Tax Refund under Section 244A',
+            mode: parts[2] || '',
+            nature: parts[3] || '',
             amount: parseNum(parts[4]),
             date: parts[5] || ''
           });
@@ -848,28 +1160,59 @@ function extractPartB4DemandRefunds(text: string, lines: string[]): PartB4Demand
     });
   }
 
-  return partB4;
+  const status: ExtractionStatus = partB4.length > 0 ? 'extracted' : 'not-present';
+  return { refunds: partB4, status };
 }
 
-export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema {
+export function extractAisEnvelope(rawText: string): {
+  schema: AisDeveloperSchema;
+  section_statuses: SectionStatuses;
+  warnings: ExtractionWarning[];
+} {
   const text = cleanText(rawText || '');
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-  const taxYear = extractTaxYear(text);
-  const partA = extractPartAGeneralInfo(text);
-  const partB1 = extractPartB1Transactions(text, lines);
-  const partB2 = extractPartB2SftTransactions(text, lines);
-  const partB3 = extractPartB3TaxPayments(text, lines);
-  const partB4 = extractPartB4DemandRefunds(text, lines);
+  const periodRes = extractStatutoryPeriod(text);
+  const warnings: ExtractionWarning[] = [...periodRes.warnings];
 
-  return {
-    tax_year: taxYear,
-    part_a_general_info: partA,
-    part_b1_tds_tcs_transactions: partB1,
-    part_b2_sft_transactions: partB2,
-    part_b3_tax_payments: partB3,
-    part_b4_demand_refunds: partB4
+  const partA = extractPartAGeneralInfo(text);
+  const isPartAPresent = Boolean(partA.pan || partA.name_of_assessee);
+  const partAStatus: ExtractionStatus = isPartAPresent ? 'extracted' : 'not-present';
+
+  const b1Res = extractPartB1Transactions(text, lines, warnings);
+  const b2Res = extractPartB2SftTransactions(text, warnings);
+  const b3Res = extractPartB3TaxPayments(text, warnings);
+  const b4Res = extractPartB4DemandRefunds(text, warnings);
+
+  const section_statuses: SectionStatuses = {
+    part_a: partAStatus,
+    part_b1: b1Res.status,
+    part_b2: b2Res.status,
+    part_b3: b3Res.status,
+    part_b4: b4Res.status,
+    A: partAStatus,
+    B1: b1Res.status,
+    B2: b2Res.status,
+    B3: b3Res.status,
+    B4: b4Res.status
   };
+
+  const schema: AisDeveloperSchema = {
+    financial_year: periodRes.financial_year,
+    assessment_year: periodRes.assessment_year,
+    tax_year: periodRes.assessment_year || periodRes.financial_year || '',
+    part_a_general_info: partA,
+    part_b1_tds_tcs_transactions: b1Res.transactions,
+    part_b2_sft_transactions: b2Res.transactions,
+    part_b3_tax_payments: b3Res.payments,
+    part_b4_demand_refunds: b4Res.refunds
+  };
+
+  return { schema, section_statuses, warnings };
+}
+
+export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema {
+  return extractAisEnvelope(rawText).schema;
 }
 
 /**
@@ -877,6 +1220,22 @@ export function extractAisDeterministicJson(rawText: string): AisDeveloperSchema
  */
 export function validateAisContract(data: AisDeveloperSchema, isPiiScrubbed = false): VerifiedAisContract {
   return performValidation(data, isPiiScrubbed);
+}
+
+interface FieldCheck {
+  valid: boolean;
+  verifiedMsg: string;
+  missingMsg: string;
+}
+
+function recordChecks(checks: FieldCheck[], verified: string[], missing: string[]): void {
+  for (const check of checks) {
+    if (check.valid) {
+      verified.push(check.verifiedMsg);
+    } else {
+      missing.push(check.missingMsg);
+    }
+  }
 }
 
 /**
@@ -887,23 +1246,22 @@ function validatePartA(data: AisDeveloperSchema) {
   const missing: string[] = [];
   const partA = data?.part_a_general_info;
   const isPanValid = Boolean(partA?.pan && /^[a-z]{5}\d{4}[a-z]$/i.test(partA.pan.trim()));
-  const isTaxYearValid = Boolean(data?.tax_year && /^\d{4}-\d{2}$/.test(data.tax_year.trim()));
+  const isFyValid = Boolean(data?.financial_year && /^\d{4}-\d{2}$/.test(data.financial_year.trim()));
+  const isAyValid = Boolean(data?.assessment_year && /^\d{4}-\d{2}$/.test(data.assessment_year.trim()));
   const isAssesseeNameValid = Boolean(partA?.name_of_assessee && partA.name_of_assessee.trim().length > 0);
-  const hasPartA = isPanValid && isTaxYearValid && isAssesseeNameValid;
+  const hasPartA = isPanValid && (isFyValid || isAyValid) && isAssesseeNameValid;
 
-  if (isPanValid) verified.push(`PAN Identity (${partA.pan})`);
-  else missing.push('Valid PAN Format (Part A)');
-
-  if (isTaxYearValid) verified.push(`Tax Year Versioning (${data.tax_year})`);
-  else missing.push('Tax Year Assessment (e.g. 2026-27)');
-
-  if (isAssesseeNameValid) verified.push(`Taxpayer Legal Name (${partA.name_of_assessee})`);
-  else missing.push('Taxpayer Legal Name');
+  recordChecks([
+    { valid: isPanValid, verifiedMsg: `PAN Identity (${partA?.pan})`, missingMsg: 'Valid PAN Format (Part A)' },
+    { valid: isFyValid, verifiedMsg: `Financial Year (${data?.financial_year})`, missingMsg: 'Financial Year (e.g. 2025-26)' },
+    { valid: isAyValid, verifiedMsg: `Assessment Year (${data?.assessment_year})`, missingMsg: 'Assessment Year (e.g. 2026-27)' },
+    { valid: isAssesseeNameValid, verifiedMsg: `Taxpayer Legal Name (${partA?.name_of_assessee})`, missingMsg: 'Taxpayer Legal Name' }
+  ], verified, missing);
 
   if (partA?.date_of_birth) verified.push('Date of Birth (Senior Citizen Allowances)');
   if (partA?.address) verified.push('Residential Address & State Jurisdiction');
 
-  return {hasPartA, isPanValid, isTaxYearValid, isAssesseeNameValid, verified, missing, partA};
+  return { hasPartA, isPanValid, isFyValid, isAyValid, isAssesseeNameValid, verified, missing, partA };
 }
 
 function validatePartB1(data: AisDeveloperSchema) {
@@ -980,10 +1338,11 @@ function performValidation(data: AisDeveloperSchema, isPiiScrubbed = false): Ver
   verifiedNodes.push(...partARes.verified, ...partB1Res.verified, ...partB2Res.verified, ...partB3Res.verified, ...partB4Res.verified);
   missingNodes.push(...partARes.missing, ...partB1Res.missing, ...partB2Res.missing, ...partB3Res.missing, ...partB4Res.missing);
 
-  // Health Score Calculation (mirroring original logic)
+  // Health Score Calculation
   let healthScore = 0;
   if (partARes.isPanValid) healthScore += 25;
-  if (partARes.isTaxYearValid) healthScore += 15;
+  if (partARes.isFyValid && partARes.isAyValid) healthScore += 15;
+  else if (partARes.isFyValid || partARes.isAyValid) healthScore += 10;
   if (partARes.isAssesseeNameValid) healthScore += 10;
   if (partB1Res.hasTdsCredits) healthScore += 25;
   if (partB3Res.hasChallanCIN || (partB3Res.partB3 && partB3Res.partB3.length > 0)) healthScore += 15;

@@ -10,7 +10,7 @@ export class AisPartA extends HTMLElement {
   private _data: PartAGeneralInfo | null = null;
 
   static get observedAttributes(): string[] {
-    return ['tax-year'];
+    return ['financial-year', 'assessment-year', 'tax-year'];
   }
 
   set data(val: PartAGeneralInfo | null) {
@@ -35,7 +35,18 @@ export class AisPartA extends HTMLElement {
 
   render(): void {
     const d = this._data;
-    const taxYear = this.getAttribute('tax-year') || '2026-27';
+    const fy = this.getAttribute('financial-year') || '';
+    const ay = this.getAttribute('assessment-year') || this.getAttribute('tax-year') || '';
+    let periodLabel = '';
+    if (fy && ay) {
+      periodLabel = `FY ${fy} | AY ${ay}`;
+    } else if (ay) {
+      periodLabel = `AY ${ay}`;
+    } else if (fy) {
+      periodLabel = `FY ${fy}`;
+    } else {
+      periodLabel = 'AY 2026-27';
+    }
 
     this.style.display = 'block';
     this.className = 'ais-part-section';
@@ -47,7 +58,7 @@ export class AisPartA extends HTMLElement {
             Part A - General Information
           </h3>
         </div>
-        <span class="meta-pill">Tax Year (T.Y.): ${escapeHtml(taxYear)}</span>
+        <span class="meta-pill">${escapeHtml(periodLabel)}</span>
       </div>
 
       <div class="ais-grid-general">

@@ -294,8 +294,9 @@ Until validated business/profession, presumptive section, residency, turnover/re
 
 > [!IMPORTANT]
 > **GATEKEEPER CONDITION:**
-> The tax calculation engine runs **ONLY when the taxpayer falls under the ITR-1 category** (or provisional ITR-1).
-> If the taxpayer is classified under **ITR-2** (or ITR-3/4) by AIS signals or user checklist elevation, this calculation is **bypassed / deferred**, because complex capital gains schedules, foreign assets, or business balance sheets require full ITR-2/3 tax calculation schedules.
+> The tax calculation engine runs **ONLY when the taxpayer falls under the ITR-1 category** (or provisional ITR-1) **AND has a supported calculation profile** (`CalculatorEligibility.supported === true`).
+> Form classification and tax calculation are distinct evaluation stages. An ITR-1-compatible return with non-zero Section 112A capital gains is valid for ITR-1 filing, but unsupported by the current tax calculator (which does not model capital gains schedules).
+> If the taxpayer is classified under **ITR-2** (or ITR-3/4), or has an unsupported calculator profile, calculation is bypassed with an explicit notice card.
 
 ```text
                ITR Form Classification Completed
@@ -311,8 +312,7 @@ Until validated business/profession, presumptive section, residency, turnover/re
    3. Compute Old Regime Tax (AY 26-27)
    4. Deduct Pre-Paid TDS & Challans
    5. Determine Tax Payable vs Refund
-   6. Compare Regimes & Suggest Best
-   7. Provide Tax Saving Optimization Tips
+   6. Display Regime Comparison & Estimated Difference
 ```
 
 ### 14.1 Income Decomposition from AIS (ITR-1 Category)
@@ -338,16 +338,19 @@ The calculator extracts and decomposes income strictly from canonical AIS source
 2. **Net Taxable Income:**
    $$\text{Net Taxable Income}_{\text{New}} = \max(0, \text{Salary Income} - 75000) + \text{Non-Salary Incomes}$$
 3. **Tax Slab Rates (AY 2026-27):**
-   - Up to ₹3,00,000: **Nil (0%)**
-   - ₹3,00,001 to ₹7,00,000: **5%**
-   - ₹7,00,001 to ₹10,00,000: **10%**
-   - ₹10,00,001 to ₹12,00,000: **15%**
-   - ₹12,00,001 to ₹15,00,000: **20%**
-   - Above ₹15,00,000: **30%**
-4. **Section 87A Rebate:** If net taxable income $\le ₹7,00,000$, full tax rebate up to ₹25,000 applies (effective tax liability is **₹0**).
-5. **Health & Education Cess:** 4% on net income tax after rebate.
-6. **Statutory Chapter VI-A Disallowance:** Under Section 115BAC, deductions under Chapter VI-A (Section 80C, 80D, 80CCD(1B), 80TTA, 80TTB) as well as Section 24(b) home loan interest on self-occupied properties are **strictly disallowed**.
-7. **UI State & Deduction Nullification:** When the New Tax Regime is selected or active, the Chapter VI-A deduction editor is strictly **hidden/collapsed**, and any previously entered deduction values are automatically **nullified to zero** (`{ ...DEFAULT_DEDUCTIONS }`) to prevent any erroneous assumption that deductions reduce New Regime tax liability.
+   - Up to ₹4,00,000: **Nil (0%)**
+   - ₹4,00,001 to ₹8,00,000: **5%**
+   - ₹8,00,001 to ₹12,00,000: **10%**
+   - ₹12,00,001 to ₹16,00,000: **15%**
+   - ₹16,00,001 to ₹20,00,000: **20%**
+   - ₹20,00,001 to ₹24,00,000: **25%**
+   - Above ₹24,00,000: **30%**
+4. **Section 87A Rebate:** Up to ₹60,000 where applicable for eligible total income up to ₹12,00,000. The calculator does not assume that special-rate income qualifies for rebate treatment.
+5. **Section 87A Marginal Relief:** For eligible total income marginally exceeding ₹12,00,000 up to ₹12,75,000, where tax exceeds the excess income over ₹12,00,000.
+6. **Surcharge & Surcharge Marginal Relief:** At thresholds ₹50L, ₹1Cr, ₹2Cr (New Regime maximum surcharge rate capped at 25%).
+7. **Health & Education Cess:** 4% on tax base (income tax plus applicable surcharge after marginal relief).
+8. **Statutory Deduction Constraints:** Under Section 115BAC, deductions under Chapter VI-A (Section 80C, 80D, 80CCD(1B), 80TTA) are generally unavailable. Section 24(b) interest on self-occupied properties is disallowed; let-out property interest can be deducted against rental income subject to loss set-off rules. Employer NPS u/s 80CCD(2) remains separately eligible subject to statutory conditions.
+9. **UI State & Deduction Nullification:** When the New Tax Regime is selected or active, the Chapter VI-A deduction editor is strictly **hidden/collapsed**, and any previously entered deduction values are automatically **nullified to zero** (`{ ...DEFAULT_DEDUCTIONS }`) to prevent any erroneous assumption that deductions reduce New Regime tax liability.
 
 #### B. Old Tax Regime (Optional)
 1. **Standard Deduction:** ₹50,000 for salaried individuals.
@@ -369,27 +372,27 @@ The calculator extracts and decomposes income strictly from canonical AIS source
 
 ### 14.4 Determination of Tax Payable vs. Tax Refund
 For the chosen regime:
-$$\text{Net Balance} = \text{Total Tax Liability} - \text{Total Tax Credit}$$
+$$\text{Net Tax Position} = \text{Total Tax Liability} - \text{Total Tax Credit}$$
 
-- If $\text{Net Balance} > 0$: **Tax Payable** (Taxpayer must pay self-assessment tax via challan before filing).
-- If $\text{Net Balance} < 0$: **Tax Refund Due** (Taxpayer is entitled to an income tax refund of $|\text{Net Balance}|$).
-- If $\text{Net Balance} = 0$: **Nil Balance** (Taxes fully satisfied).
+- If $\text{Net Tax Position} > 0$: **Tax Payable** (Taxpayer must pay self-assessment tax via challan before filing).
+- If $\text{Net Tax Position} < 0$: **Tax Refund Claimable** (Taxpayer is entitled to claim an income tax refund of $|\text{Net Tax Position}|$).
+- If $\text{Net Tax Position} = 0$: **Nil Balance** (Taxes fully satisfied).
 
-### 14.5 Regime Comparison & Tax-Saving Advisory
-1. **Optimal Regime Identification:**
+### 14.5 Regime Comparison & Estimated Tax Difference
+1. **Recommended Regime Identification:**
    $$\text{Recommended Regime} = \begin{cases} \text{New Tax Regime}, & \text{if } \text{Tax}_{\text{New}} \le \text{Tax}_{\text{Old}} \\ \text{Old Tax Regime}, & \text{if } \text{Tax}_{\text{Old}} < \text{Tax}_{\text{New}} \end{cases}$$
-2. **Estimated Tax Savings:**
-   $$\text{Estimated Tax Savings} = |\text{Tax}_{\text{Old}} - \text{Tax}_{\text{New}}|$$
-3. **Tax Optimization & Avoidance Advisory:**
-   - **When New Regime Wins:** Highlight the simplicity, absence of investment lock-ins, higher rebate threshold (₹7L taxable / ₹7.75L gross salary), and ₹75k standard deduction.
-   - **Breakeven Threshold Analysis:** Calculate the additional deductions (u/s 80C, 80D, 80CCD(1B), HRA) required for the Old Regime to become more beneficial than the New Regime.
-   - **Actionable Optimization Options:**
-     - *NPS 80CCD(1B):* Invest up to ₹50,000 exclusively over and above Section 80C.
-     - *Health Insurance 80D:* Claim up to ₹25,000 for family + ₹50,000 for senior parents.
-     - *Interest Deductions 80TTA/80TTB:* Maximize savings bank interest deduction.
-     - *House Rent Allowance (HRA):* Submit rent receipts if living in rented accommodation.
+2. **Estimated Tax Difference:**
+   $$\text{Estimated Tax Difference} = |\text{Tax}_{\text{Old}} - \text{Tax}_{\text{New}}|$$
+3. **Informational Guidance:**
+   - **When New Regime Wins:** Highlight the simplicity, absence of investment lock-in requirements, higher rebate threshold (₹12L taxable income / ₹12.75L gross salary with ₹75k standard deduction), and ₹75k standard deduction.
+   - **Breakeven Threshold Analysis:** Calculate the additional deductions (u/s 80C, 80D, 80CCD(1B), 24b) required for the Old Regime to become more beneficial than the New Regime.
+   - **Informational Considerations:**
+     - *NPS 80CCD(1B):* Up to ₹50,000 exclusively over and above Section 80C (Old Regime).
+     - *Health Insurance 80D:* Up to ₹25,000 for family + ₹50,000 for senior parents (Old Regime).
+     - *Interest Deductions 80TTA/80TTB:* Savings bank interest deduction (Old Regime).
+     - *House Loan Interest 24(b):* Up to ₹2,00,000 for self-occupied home loan interest (Old Regime).
 4. **Interactive Deduction Customization State Machine:**
-   - **Old Regime Chosen:** The taxpayer can toggle the Chapter VI-A deduction editor to customize investments (80C, 80D, 80CCD(1B), 24b) and view real-time tax savings. A *Reset to ₹0* action is provided for quick clearing.
+   - **Old Regime Chosen:** The taxpayer can toggle the Chapter VI-A deduction editor to customize investments (80C, 80D, 80CCD(1B), 24b) and view real-time tax differences. A *Reset to ₹0* action is provided for quick clearing.
    - **New Regime Chosen:** The deduction editor is automatically hidden/collapsed, previous entered deduction values are strictly nullified back to zero, and an informative badge (`Chapter VI-A Deductions Not Applicable (Sec 115BAC)`) replaces the customization button.
 
 ---
@@ -519,7 +522,7 @@ Any agent modifying ITR routing MUST:
 7. Never infer business income solely from a TDS section code;
 8. Distinguish confirmed blockers from unresolved checks;
 9. Keep ITR-form routing separate from tax-regime calculation;
-10. Trigger the income tax calculator **ONLY when the taxpayer is categorized under ITR-1**;
+10. Trigger the income tax calculator **ONLY when the taxpayer is categorized under ITR-1 AND has a supported calculator profile** (`CalculatorEligibility.supported === true`);
 11. Keep checklist questions synchronized with AY 2026-27 official ITR eligibility rules (up to two house properties allowed);
 12. Preserve traceability through stable trigger codes;
 13. Update tests whenever statutory thresholds or form eligibility rules change.

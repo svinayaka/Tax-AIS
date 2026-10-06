@@ -9,6 +9,7 @@ import type { AisDeveloperSchema } from '../types/ais';
 import { escapeHtml, formatInr } from '../lib/dom-utils';
 import {
   calculateTaxComparison,
+  evaluateCalculatorEligibility,
   DEFAULT_DEDUCTIONS,
   type TaxDeductionInputs,
   type DualRegimeTaxComparison,
@@ -67,19 +68,26 @@ export class AisTaxCalculator extends HTMLElement {
     this.render();
   }
 
-  private renderGatekeeperNotice(): string {
+  private renderGatekeeperNotice(reasons: string[] = []): string {
+    const isItr2 = !this._isEligibleForItr1;
+    const title = isItr2
+      ? 'ITR-1 Tax Calculation Bypassed (ITR-2 Applicable)'
+      : 'Tax Calculation Unsupported for Taxpayer Profile';
+    const desc = reasons.length > 0
+      ? reasons.map(r => escapeHtml(r)).join('<br>')
+      : 'This taxpayer is categorized under <strong>Form ITR-2</strong> (due to capital gains, foreign assets, multiple house properties, or statutory checklist selections). Complex capital gains schedules and business ledgers must be calculated through full ITR-2 filing schedules.';
+    const pill = isItr2 ? 'Requires Form ITR-2' : 'Unsupported Profile';
+
     return `
       <div class="ais-tax-calc-notice-card">
         <div class="ais-tax-notice-left">
           <i data-lucide="info" class="ais-tax-notice-icon"></i>
           <div>
-            <h4 class="ais-tax-notice-title">ITR-1 Tax Calculation Bypassed (ITR-2 Applicable)</h4>
-            <p class="ais-tax-notice-desc">
-              This taxpayer is categorized under <strong>Form ITR-2</strong> (due to capital gains, foreign assets, multiple house properties, or statutory checklist selections). Complex capital gains schedules and business ledgers must be calculated through full ITR-2 filing schedules.
-            </p>
+            <h4 class="ais-tax-notice-title">${title}</h4>
+            <p class="ais-tax-notice-desc">${desc}</p>
           </div>
         </div>
-        <span class="meta-pill">Requires Form ITR-2</span>
+        <span class="meta-pill">${pill}</span>
       </div>
     `;
   }
@@ -495,8 +503,9 @@ export class AisTaxCalculator extends HTMLElement {
     this.style.display = 'block';
     this.className = 'ais-part-section ais-tax-calculator-section';
 
-    if (!this._isEligibleForItr1) {
-      this.innerHTML = this.renderGatekeeperNotice();
+    const eligibility = evaluateCalculatorEligibility(this._aisData, this._isEligibleForItr1);
+    if (!eligibility.supported) {
+      this.innerHTML = this.renderGatekeeperNotice(eligibility.reasons);
       createIcons({ icons, root: this });
       return;
     }

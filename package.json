@@ -1,13 +1,14 @@
 {
   "name": "tax-ais",
   "version": "1.0.0",
-  "description": "100% In-Browser Indian Income Tax Annual Information Statement (AIS / Form 168) Extraction Engine & Reconciliation Dashboard",
+  "description": "100% In-Browser Indian Income Tax Annual Information Statement (AIS) Extraction Engine & Reconciliation Dashboard",
   "private": false,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "tsx tests/extractor.test.ts",
     "lint": "eslint src/ index.html",
     "lint:fix": "eslint src/ index.html --fix",
     "stylelint": "stylelint 'src/**/*.{css,scss}'",
@@ -52,6 +53,7 @@
     "stylelint": "^16.26.1",
     "stylelint-config-standard": "^37.0.0",
     "stylelint-config-standard-scss": "^14.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.3.0"
   },

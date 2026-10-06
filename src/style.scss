@@ -2290,6 +2290,19 @@ ais-deductor-card,
   border-radius: var(--ksv-ds-radius-full);
 }
 
+.status-pill-inactive {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ksv-ds-space-1);
+  background: var(--ksv-ds-status-warning-bg);
+  border: 1px solid var(--ksv-ds-status-warning-border);
+  color: var(--ksv-ds-status-warning-text);
+  font-size: var(--ksv-ds-text-2xs);
+  font-weight: var(--ksv-ds-font-weight-bold);
+  padding: var(--ksv-ds-space-1) var(--ksv-ds-space-2);
+  border-radius: var(--ksv-ds-radius-full);
+}
+
 .ais-empty-part {
   display: flex;
   align-items: center;

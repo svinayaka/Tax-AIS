@@ -1,13 +1,13 @@
 # Tax-AIS 🇮🇳
 
-> **100% In-Browser Indian Income Tax Annual Information Statement (AIS / Form 168) Extraction Engine & Visual Dashboard**
+> **100% In-Browser Indian Income Tax Annual Information Statement (AIS) Extraction Engine & Visual Dashboard**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Design System](https://img.shields.io/badge/Design%20System-%40svinayaka%2Fsiddi--design--system-8b5cf6)](https://www.npmjs.com/package/@svinayaka/siddi-design-system)
 [![PDF.js](https://img.shields.io/badge/PDF.js-Client--Side-red.svg)](https://mozilla.github.io/pdf.js/)
 [![Vite](https://img.shields.io/badge/Vite-Fast%20Bundler-646CFF.svg)](https://vitejs.dev/)
 
-**Tax-AIS** is a client-side data extraction engine that parses unstructured Indian **Annual Information Statement (AIS / Form 168)** and **Form 26AS** PDF documents into cleanly structured developer-ready JSON, CSV, and interactive reconciliation dashboards.
+**Tax-AIS** is a client-side data extraction engine that parses unstructured Indian **Annual Information Statement (AIS)** and **Form 26AS** PDF documents into cleanly structured developer-ready JSON, CSV, and interactive reconciliation dashboards.
 
 ---
 
@@ -51,7 +51,8 @@
 
 ```json
 {
-  "tax_year": "2026-27",
+  "financial_year": "2025-26",
+  "assessment_year": "2026-27",
   "part_a_general_info": {
     "name_of_assessee": "SIDDI VINAYAKA",
     "pan": "ANRPV2797D",

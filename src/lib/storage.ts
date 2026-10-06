@@ -8,7 +8,13 @@
  * - Overwritten whenever a new file is uploaded or explicitly cleared by user.
  */
 
-import type { StructuredExtractionResult, ItrClassificationResult } from '../types/ais';
+import type {
+  StructuredExtractionResult,
+  ItrClassificationResult,
+  AisDeveloperSchema,
+  SectionStatuses
+} from '../types/ais';
+import { deriveAyFromFy, deriveFyFromAy } from './extractor';
 
 export interface StoredSession {
   id: string; // Fixed key 'active_session'
@@ -90,9 +96,61 @@ export async function saveTaxSession(
   }
 }
 
+function normalizePeriod(rawExt: AisDeveloperSchema): void {
+  let fy = rawExt.financial_year || '';
+  let ay = rawExt.assessment_year || '';
+  if (!fy && rawExt.tax_year) {
+    ay = rawExt.tax_year;
+    fy = deriveFyFromAy(ay);
+  } else if (fy && !ay) {
+    ay = deriveAyFromFy(fy);
+  }
+  rawExt.financial_year = fy;
+  rawExt.assessment_year = ay;
+  rawExt.tax_year = ay || fy || rawExt.tax_year;
+}
+
+function deriveDefaultSectionStatuses(rawExt: AisDeveloperSchema | null | undefined): SectionStatuses {
+  return {
+    part_a: rawExt?.part_a_general_info?.pan ? 'extracted' : 'not-present',
+    part_b1: (rawExt?.part_b1_tds_tcs_transactions?.length ?? 0) > 0 ? 'extracted' : 'not-present',
+    part_b2: (rawExt?.part_b2_sft_transactions?.length ?? 0) > 0 ? 'extracted' : 'not-present',
+    part_b3: (rawExt?.part_b3_tax_payments?.length ?? 0) > 0 ? 'extracted' : 'not-present',
+    part_b4: (rawExt?.part_b4_demand_refunds?.length ?? 0) > 0 ? 'extracted' : 'not-present'
+  };
+}
+
+function migrateSession(session: StoredSession): StoredSession | null {
+  const sd = session.structuredData;
+  if (!sd) return null;
+
+  if (sd.schema_version && sd.schema_version !== '1.0') {
+    return null;
+  }
+
+  sd.schema_version = '1.0';
+  sd.itr_routing_rule_version = sd.itr_routing_rule_version || 'AY2026-27.1';
+  sd.tax_rule_version = sd.tax_rule_version || 'AY2026-27.1';
+  sd.document_type = sd.document_type || 'AIS';
+  sd.warnings = sd.warnings || [];
+
+  const rawExt = sd.extraction || sd.aisJson;
+  if (rawExt) {
+    normalizePeriod(rawExt);
+    sd.extraction = rawExt;
+    sd.aisJson = rawExt;
+  }
+
+  if (!sd.section_statuses) {
+    sd.section_statuses = deriveDefaultSectionStatuses(rawExt);
+  }
+
+  return session;
+}
+
 /**
  * Retrieves the stored tax session if it exists and has not expired (within 24h).
- * If expired, automatically purges the session.
+ * If expired or incompatible, automatically purges the session.
  */
 export async function loadTaxSession(): Promise<StoredSession | null> {
   try {
@@ -114,9 +172,18 @@ export async function loadTaxSession(): Promise<StoredSession | null> {
           // Expired after 24 hours - remove it
           store.delete(SESSION_KEY);
           resolve(null);
-        } else {
-          resolve(session);
+          return;
         }
+
+        const migrated = migrateSession(session);
+        if (!migrated) {
+          // Incompatible schema version - purge
+          store.delete(SESSION_KEY);
+          resolve(null);
+          return;
+        }
+
+        resolve(migrated);
       };
 
       getRequest.onerror = () => reject(getRequest.error || new Error('Failed to retrieve tax session from IndexedDB'));

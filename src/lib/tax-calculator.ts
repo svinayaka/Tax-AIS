@@ -6,7 +6,7 @@
  * Bypassed/deferred for ITR-2 / ITR-3 / ITR-4.
  */
 
-import type { AisDeveloperSchema } from '../types/ais';
+import type { AisDeveloperSchema, CalculatorEligibility } from '../types/ais';
 
 export interface TaxDeductionInputs {
   section80C: number;     // EPF, PPF, ELSS, Life Insurance (cap: ₹1,50,000)
@@ -16,6 +16,8 @@ export interface TaxDeductionInputs {
   section24b: number;     // Home loan interest on self-occupied (cap: ₹2,00,000)
   otherDeductions: number;// Other Chapter VI-A deductions
 }
+
+export type TaxPositionStatus = 'PAYABLE' | 'REFUND' | 'NIL';
 
 export interface RegimeTaxBreakdown {
   regime: 'NEW' | 'OLD';
@@ -33,7 +35,10 @@ export interface RegimeTaxBreakdown {
   totalTaxLiability: number;
   totalPrePaidTax: number;
   netPayableOrRefund: number;
-  status: 'PAYABLE' | 'REFUND' | 'NIL';
+  status: TaxPositionStatus;
+  // Standardized sign convention: positive = tax payable; negative = tax refund claimable
+  netTaxPosition: number;
+  netTaxStatus: TaxPositionStatus;
 }
 
 export interface DualRegimeTaxComparison {
@@ -59,6 +64,38 @@ export const DEFAULT_DEDUCTIONS: TaxDeductionInputs = {
   section24b: 0,
   otherDeductions: 0
 };
+
+/**
+ * Evaluate whether the taxpayer profile is supported by the current tax calculator.
+ * Decoupled from ITR-1 form recommendation per ARCHITECTURE.md Section 10.10.
+ */
+export function evaluateCalculatorEligibility(
+  ais: AisDeveloperSchema | null | undefined,
+  isEligibleForItr1: boolean
+): CalculatorEligibility {
+  const reasons: string[] = [];
+  if (!isEligibleForItr1) {
+    reasons.push('Taxpayer profile is outside ITR-1 (ITR-2 or higher applicable). Complex capital gains schedules, foreign assets, or business balance sheets require full return filing computation outside ITR-1.');
+    return { supported: false, reasons };
+  }
+  if (!ais) {
+    reasons.push('No AIS document data loaded to perform tax calculation.');
+    return { supported: false, reasons };
+  }
+  const sft = ais.part_b2_sft_transactions ?? [];
+  const hasCapitalGainsSignal = sft.some(t => {
+    const code = (t.information_code || '').toUpperCase();
+    return code.includes('SFT-017') || code.includes('SFT-018') || code.includes('LES') || code.includes('EMF');
+  });
+  if (hasCapitalGainsSignal) {
+    reasons.push('Securities activity / Section 112A capital gains present. While limited LTCG (<= ₹1.25 lakh) is compatible with ITR-1 filing, capital gains schedules are not modeled by the current tax calculator.');
+  }
+
+  return {
+    supported: reasons.length === 0,
+    reasons
+  };
+}
 
 /**
  * Extract decomposed incomes and pre-paid tax credits directly from AIS Schema
@@ -127,8 +164,8 @@ export function extractAisIncomeSummary(ais: AisDeveloperSchema | null | undefin
 
 /**
  * Compute Tax under New Tax Regime (Section 115BAC - AY 2026-27)
- * Slabs: 0-3L (0%), 3L-7L (5%), 7L-10L (10%), 10L-12L (15%), 12L-15L (20%), >15L (30%)
- * Rebate 87A: Up to ₹25,000 for taxable income <= ₹7,00,000
+ * Slabs: 0-4L (0%), 4L-8L (5%), 8L-12L (10%), 12L-16L (15%), 16L-20L (20%), 20L-24L (25%), >24L (30%)
+ * Rebate 87A: Up to ₹60,000 for taxable income <= ₹12,00,000
  */
 export function computeNewRegimeTax(taxableIncome: number): {
   slabTax: number;
@@ -140,37 +177,44 @@ export function computeNewRegimeTax(taxableIncome: number): {
   const roundedIncome = Math.max(0, Math.round(taxableIncome / 10) * 10);
   let slabTax = 0;
 
-  if (roundedIncome > 1500000) {
-    slabTax += (roundedIncome - 1500000) * 0.30;
-    slabTax += 300000 * 0.20; // 12L - 15L
-    slabTax += 200000 * 0.15; // 10L - 12L
-    slabTax += 300000 * 0.10; // 7L - 10L
-    slabTax += 400000 * 0.05; // 3L - 7L
+  if (roundedIncome > 2400000) {
+    slabTax += (roundedIncome - 2400000) * 0.30;
+    slabTax += 400000 * 0.25; // 20L - 24L
+    slabTax += 400000 * 0.20; // 16L - 20L
+    slabTax += 400000 * 0.15; // 12L - 16L
+    slabTax += 400000 * 0.10; // 8L - 12L
+    slabTax += 400000 * 0.05; // 4L - 8L
+  } else if (roundedIncome > 2000000) {
+    slabTax += (roundedIncome - 2000000) * 0.25;
+    slabTax += 400000 * 0.20;
+    slabTax += 400000 * 0.15;
+    slabTax += 400000 * 0.10;
+    slabTax += 400000 * 0.05;
+  } else if (roundedIncome > 1600000) {
+    slabTax += (roundedIncome - 1600000) * 0.20;
+    slabTax += 400000 * 0.15;
+    slabTax += 400000 * 0.10;
+    slabTax += 400000 * 0.05;
   } else if (roundedIncome > 1200000) {
-    slabTax += (roundedIncome - 1200000) * 0.20;
-    slabTax += 200000 * 0.15;
-    slabTax += 300000 * 0.10;
+    slabTax += (roundedIncome - 1200000) * 0.15;
+    slabTax += 400000 * 0.10;
     slabTax += 400000 * 0.05;
-  } else if (roundedIncome > 1000000) {
-    slabTax += (roundedIncome - 1000000) * 0.15;
-    slabTax += 300000 * 0.10;
+  } else if (roundedIncome > 800000) {
+    slabTax += (roundedIncome - 800000) * 0.10;
     slabTax += 400000 * 0.05;
-  } else if (roundedIncome > 700000) {
-    slabTax += (roundedIncome - 700000) * 0.10;
-    slabTax += 400000 * 0.05;
-  } else if (roundedIncome > 300000) {
-    slabTax += (roundedIncome - 300000) * 0.05;
+  } else if (roundedIncome > 400000) {
+    slabTax += (roundedIncome - 400000) * 0.05;
   }
 
   slabTax = Math.round(slabTax);
 
-  // Section 87A Rebate: Full rebate if income <= 7,00,000
+  // Section 87A Rebate: Full rebate up to ₹60,000 if income <= 12,00,000
   let rebate87A = 0;
-  if (roundedIncome <= 700000) {
-    rebate87A = slabTax;
-  } else if (roundedIncome > 700000 && roundedIncome <= 727777) {
+  if (roundedIncome <= 1200000) {
+    rebate87A = Math.min(slabTax, 60000);
+  } else if (roundedIncome > 1200000 && roundedIncome <= 1275000) {
     // Marginal relief under Section 87A
-    const excessIncome = roundedIncome - 700000;
+    const excessIncome = roundedIncome - 1200000;
     if (slabTax > excessIncome) {
       rebate87A = slabTax - excessIncome;
     }
@@ -241,7 +285,7 @@ export function calculateTaxComparison(
   const newTaxRes = computeNewRegimeTax(taxableIncomeNew);
   const netNew = newTaxRes.totalTax - totalPrePaidTax;
 
-function getTaxStatus(netBalance: number): 'PAYABLE' | 'REFUND' | 'NIL' {
+function getTaxStatus(netBalance: number): TaxPositionStatus {
   if (netBalance > 0) return 'PAYABLE';
   if (netBalance < 0) return 'REFUND';
   return 'NIL';
@@ -263,7 +307,9 @@ function getTaxStatus(netBalance: number): 'PAYABLE' | 'REFUND' | 'NIL' {
     totalTaxLiability: newTaxRes.totalTax,
     totalPrePaidTax,
     netPayableOrRefund: netNew,
-    status: getTaxStatus(netNew)
+    status: getTaxStatus(netNew),
+    netTaxPosition: netNew,
+    netTaxStatus: getTaxStatus(netNew)
   };
 
   // 2. Old Tax Regime Computation
@@ -296,7 +342,9 @@ function getTaxStatus(netBalance: number): 'PAYABLE' | 'REFUND' | 'NIL' {
     totalTaxLiability: oldTaxRes.totalTax,
     totalPrePaidTax,
     netPayableOrRefund: netOld,
-    status: getTaxStatus(netOld)
+    status: getTaxStatus(netOld),
+    netTaxPosition: netOld,
+    netTaxStatus: getTaxStatus(netOld)
   };
 
   // 3. Recommended Regime Determination

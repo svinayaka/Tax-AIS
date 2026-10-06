@@ -1,6 +1,6 @@
 /**
  * Type definitions for Tax-AIS extraction engine
- * Matches Indian Income Tax AIS (Form 168) / Form 26AS Developer Contract
+ * Matches Indian Income Tax AIS / Form 26AS Developer Contract
  */
 
 export interface PartAGeneralInfo {
@@ -68,13 +68,100 @@ export interface PartB4DemandRefund {
   date_of_issuance?: string;
 }
 
+/**
+ * Statutory Period & Future Form 168 Year Model
+ * Under Income-tax Act, 1961 (current mode), periods are partitioned into financial_year and assessment_year.
+ * Under Income-tax Act, 2025 (future mode), statutory period uses tax_year directly.
+ */
+export type StatutoryPeriod =
+  | {
+      regime: 'ITA_1961';
+      financial_year: string;
+      assessment_year: string;
+    }
+  | {
+      regime: 'ITA_2025';
+      tax_year: string;
+    };
+
+export const SCHEMA_VERSION = '1.0' as const;
+export const ITR_ROUTING_RULE_VERSION = 'AY2026-27.1' as const;
+export const TAX_RULE_VERSION = 'AY2026-27.1' as const;
+
+/**
+ * Canonical Developer Schema contract for AIS.
+ *
+ * Financial Year vs Assessment Year:
+ * - financial_year: source-document financial year (e.g. "2025-26").
+ * - assessment_year: corresponding filing/rule year (e.g. "2026-27").
+ * - tax_year: preserved for backward compatibility and migration.
+ */
 export interface AisDeveloperSchema {
-  tax_year: string;
+  financial_year: string;
+  assessment_year: string;
+  tax_year?: string;
   part_a_general_info: PartAGeneralInfo;
   part_b1_tds_tcs_transactions: PartB1TdsTcsTransaction[];
   part_b2_sft_transactions: PartB2SftTransaction[];
   part_b3_tax_payments: PartB3TaxPayment[];
   part_b4_demand_refunds: PartB4DemandRefund[];
+}
+
+/**
+ * Extraction status indicator for individual document sections.
+ * Distinguishes between successfully extracted data, sections absent from source document,
+ * unsupported formats, and parser extraction failures.
+ */
+export type ExtractionStatus =
+  | 'extracted'
+  | 'not-present'
+  | 'unsupported'
+  | 'failed';
+
+/**
+ * Structured extraction warning emitted during section parsing.
+ * Code and section identifiers allow programmatic handling without leaking sensitive PII.
+ */
+export interface ExtractionWarning {
+  code: string;
+  section: 'A' | 'B1' | 'B2' | 'B3' | 'B4';
+  message: string;
+}
+
+/**
+ * Authoritative machine-readable extraction statuses across AIS sections.
+ */
+export interface SectionStatuses {
+  part_a: ExtractionStatus;
+  part_b1: ExtractionStatus;
+  part_b2: ExtractionStatus;
+  part_b3: ExtractionStatus;
+  part_b4: ExtractionStatus;
+  A?: ExtractionStatus;
+  B1?: ExtractionStatus;
+  B2?: ExtractionStatus;
+  B3?: ExtractionStatus;
+  B4?: ExtractionStatus;
+}
+
+/**
+ * Section container with status, records, and parser warnings.
+ */
+export interface ExtractionSection<T> {
+  status: ExtractionStatus;
+  records: T[];
+  warnings: string[];
+}
+
+/**
+ * Strict canonical extraction envelope per ARCHITECTURE.md Section 14.
+ */
+export interface CanonicalExtractionEnvelope {
+  schema_version: '1.0';
+  document_type: 'AIS' | 'FORM_26AS';
+  extraction: AisDeveloperSchema;
+  section_statuses: SectionStatuses;
+  warnings: ExtractionWarning[];
 }
 
 export interface DocumentClassification {
@@ -117,6 +204,14 @@ export interface ExtractionMetadata {
 }
 
 export interface StructuredExtractionResult {
+  schema_version: '1.0';
+  itr_routing_rule_version: string;
+  tax_rule_version: string;
+  document_type: 'AIS' | 'FORM_26AS';
+  extraction: AisDeveloperSchema | null;
+  section_statuses: SectionStatuses;
+  warnings: ExtractionWarning[];
+
   documentClassification: DocumentClassification;
   summary: {
     overview: string;
@@ -227,4 +322,34 @@ export interface ItrClassificationResult {
   detectedFactors: ItrDetectedFactors;
 }
 
+export type TaxPositionStatus = 'PAYABLE' | 'REFUND' | 'NIL';
 
+/**
+ * Tax computation result breakdown for a specific tax regime (AY 2026-27).
+ * Exposes individual statutory tax components explicitly per ARCHITECTURE.md Section 10.10.
+ */
+export interface RegimeTaxResult {
+  grossTotalIncome: number;
+  taxableIncome: number;
+
+  incomeTax: number;
+  rebate87A: number;
+
+  surchargeBeforeMarginalRelief: number;
+  marginalRelief: number;
+  surchargeAfterMarginalRelief: number;
+
+  healthEducationCess: number;
+  totalTaxLiability: number;
+
+  prepaidTaxes: number;
+
+  // Sign convention: positive indicates tax payable (due); negative indicates tax refund claimable
+  netTaxPosition: number;
+  netTaxStatus: TaxPositionStatus;
+}
+
+export interface CalculatorEligibility {
+  supported: boolean;
+  reasons: string[];
+}

@@ -8,8 +8,9 @@ import { escapeCsv } from './dom-utils';
 export function exportToJson(structuredData: StructuredExtractionResult | null, pretty = true): string {
   if (!structuredData) return '{}';
 
-  if (structuredData.aisJson) {
-    return pretty ? JSON.stringify(structuredData.aisJson, null, 2) : JSON.stringify(structuredData.aisJson);
+  const extraction = structuredData.extraction || structuredData.aisJson;
+  if (extraction) {
+    return pretty ? JSON.stringify(extraction, null, 2) : JSON.stringify(extraction);
   }
 
   const cleanData = {

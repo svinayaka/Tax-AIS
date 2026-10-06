@@ -19,7 +19,15 @@ import { AisDeductorCard } from './components/ais-deductor-card';
 import { AisTaxPaymentCard } from './components/ais-tax-payment-card';
 import { AisItrAdvisor } from './components/ais-itr-advisor';
 import { AisTaxCalculator } from './components/ais-tax-calculator';
-import type { AisDeveloperSchema, StructuredExtractionResult, ItrClassificationResult } from './types/ais';
+import {
+  SCHEMA_VERSION,
+  ITR_ROUTING_RULE_VERSION,
+  TAX_RULE_VERSION,
+  type AisDeveloperSchema,
+  type StructuredExtractionResult,
+  type ItrClassificationResult
+} from './types/ais';
+import { deriveAyFromFy, deriveFyFromAy } from './lib/extractor';
 import { saveTaxSession, loadTaxSession, clearTaxSession, formatRemainingTime } from './lib/storage';
 
 // ==========================================================================
@@ -209,6 +217,80 @@ async function processPdfFile(
   }
 }
 
+function buildJsonStructuredData(
+  rawParsed: Record<string, any>,
+  textContent: string
+): StructuredExtractionResult | null {
+  const parsedJson = rawParsed.extraction || rawParsed.aisJson || rawParsed;
+  if (!parsedJson.part_a_general_info && !parsedJson.part_b1_tds_tcs_transactions) {
+    return null;
+  }
+
+  let fy = parsedJson.financial_year || '';
+  let ay = parsedJson.assessment_year || '';
+  if (!fy && parsedJson.tax_year) {
+    ay = parsedJson.tax_year;
+    fy = deriveFyFromAy(ay);
+  } else if (fy && !ay) {
+    ay = deriveAyFromFy(fy);
+  }
+
+  const canonicalExtraction: AisDeveloperSchema = {
+    financial_year: fy,
+    assessment_year: ay,
+    tax_year: ay || fy || '',
+    part_a_general_info: parsedJson.part_a_general_info || { name_of_assessee: '', pan: '', aadhaar: '', date_of_birth: '', mobile_number: '', email_address: '', address: '' },
+    part_b1_tds_tcs_transactions: parsedJson.part_b1_tds_tcs_transactions || [],
+    part_b2_sft_transactions: parsedJson.part_b2_sft_transactions || [],
+    part_b3_tax_payments: parsedJson.part_b3_tax_payments || [],
+    part_b4_demand_refunds: parsedJson.part_b4_demand_refunds || []
+  };
+
+  return {
+    schema_version: rawParsed.schema_version || SCHEMA_VERSION,
+    itr_routing_rule_version: rawParsed.itr_routing_rule_version || ITR_ROUTING_RULE_VERSION,
+    tax_rule_version: rawParsed.tax_rule_version || TAX_RULE_VERSION,
+    document_type: rawParsed.document_type || 'AIS',
+    extraction: canonicalExtraction,
+    section_statuses: rawParsed.section_statuses || {
+      part_a: canonicalExtraction.part_a_general_info?.pan ? 'extracted' : 'not-present',
+      part_b1: canonicalExtraction.part_b1_tds_tcs_transactions.length > 0 ? 'extracted' : 'not-present',
+      part_b2: canonicalExtraction.part_b2_sft_transactions.length > 0 ? 'extracted' : 'not-present',
+      part_b3: canonicalExtraction.part_b3_tax_payments.length > 0 ? 'extracted' : 'not-present',
+      part_b4: canonicalExtraction.part_b4_demand_refunds.length > 0 ? 'extracted' : 'not-present'
+    },
+    warnings: rawParsed.warnings || [],
+    documentClassification: {
+      type: 'ais',
+      confidence: 'high',
+      score: 98,
+      label: 'Annual Information Statement (AIS)',
+      icon: 'file-text',
+      themeColor: 'var(--ksv-ds-color-indigo-500)'
+    },
+    summary: {
+      overview: `Annual Information Statement for FY ${fy || '—'} / AY ${ay || '—'}`,
+      keyHighlights: [],
+      completeness: 'Complete'
+    },
+    metadata: {
+      extractionDurationMs: 5,
+      characterCount: textContent.length,
+      wordCount: textContent.split(/\s+/).length,
+      lineCount: textContent.split('\n').length,
+      confidenceScore: 98,
+      extractedAt: new Date().toISOString()
+    },
+    keyValues: {},
+    flatKeyValues: [],
+    entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
+    tables: [],
+    sections: [],
+    customFieldResults: {},
+    aisJson: canonicalExtraction
+  };
+}
+
 async function processJsonFile(
   file: File,
   fill: HTMLElement | null,
@@ -224,38 +306,9 @@ async function processJsonFile(
   state.currentPageNum = 1;
 
   try {
-    const parsedJson = JSON.parse(textContent);
-    if (parsedJson.part_a_general_info || parsedJson.part_b1_tds_tcs_transactions) {
-      const structuredData: StructuredExtractionResult = {
-        documentClassification: {
-          type: 'ais',
-          confidence: 'high',
-          score: 98,
-          label: 'Annual Information Statement (AIS - Form 168)',
-          icon: 'file-text',
-          themeColor: 'var(--ksv-ds-color-indigo-500)'
-        },
-        summary: {
-          overview: `Annual Information Statement for Tax Year ${parsedJson.tax_year || '2026-27'}`,
-          keyHighlights: [],
-          completeness: 'Complete'
-        },
-        metadata: {
-          extractionDurationMs: 5,
-          characterCount: textContent.length,
-          wordCount: textContent.split(/\s+/).length,
-          lineCount: textContent.split('\n').length,
-          confidenceScore: 98,
-          extractedAt: new Date().toISOString()
-        },
-        keyValues: {},
-        flatKeyValues: [],
-        entities: { emails: [], phones: [], urls: [], dates: [], monetaryAmounts: [], identifiers: [], organizations: [] },
-        tables: [],
-        sections: [],
-        customFieldResults: {},
-        aisJson: parsedJson
-      };
+    const rawParsed = JSON.parse(textContent);
+    const structuredData = buildJsonStructuredData(rawParsed, textContent);
+    if (structuredData) {
       const itrRecommendation = classifyItr(structuredData);
       structuredData.itrRecommendation = itrRecommendation;
       state.structuredData = structuredData;
@@ -408,42 +461,42 @@ function triggerConfetti(): void {
   });
 }
 
-// ==========================================================================
-// Rendering Pipeline
-// ==========================================================================
-function renderAllViews(): void {
-  const data = state.structuredData;
-  if (!data) return;
+function formatPeriodBanner(ais: AisDeveloperSchema): string {
+  if (ais.financial_year && ais.assessment_year) {
+    return `FY: ${ais.financial_year} | AY: ${ais.assessment_year}`;
+  }
+  if (ais.assessment_year) {
+    return `AY: ${ais.assessment_year}`;
+  }
+  if (ais.tax_year) {
+    return `AY: ${ais.tax_year}`;
+  }
+  return '';
+}
 
-  const ais = data.aisJson || {} as AisDeveloperSchema;
+function renderHeaderBanner(ais: AisDeveloperSchema): void {
   const partA = ais.part_a_general_info || { name_of_assessee: '', pan: '' };
   const partB1 = ais.part_b1_tds_tcs_transactions || [];
   const partB3 = ais.part_b3_tax_payments || [];
 
-  // Reveal Workspace & Hide Upload Screen
-  document.getElementById('uploadSection')?.classList.add('hidden');
-  const workspace = document.getElementById('resultsWorkspace');
-  if (workspace) {
-    workspace.classList.remove('hidden');
-    workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  // 1. Header Banner
   const titleEl = document.getElementById('docTitleHeading');
   const yearEl = document.getElementById('taxYearBannerBadge');
   const summaryEl = document.getElementById('docSummaryText');
   const formatBadge = document.getElementById('docFormatBadge');
 
   if (titleEl) titleEl.textContent = `Annual Information Statement (AIS)`;
-  if (yearEl) yearEl.textContent = `Tax Year: ${ais.tax_year || '2026-27'}`;
+  if (yearEl) yearEl.textContent = formatPeriodBanner(ais);
   if (formatBadge) {
-    formatBadge.textContent = state.pdfDoc ? 'AIS PDF (Form 168)' : 'AIS Document';
+    formatBadge.textContent = state.pdfDoc ? 'AIS PDF' : 'AIS Document';
   }
   if (summaryEl) {
     summaryEl.textContent = `Assessee: ${partA.name_of_assessee || 'Assessee'} (PAN: ${partA.pan || '—'}), ${partB1.length} TDS Deductor source(s), ${partB3.length} Tax Payment challan(s) extracted.`;
   }
+}
 
-  // 2. Render KPI Cards
+function renderKpiCards(ais: AisDeveloperSchema): void {
+  const partB1 = ais.part_b1_tds_tcs_transactions || [];
+  const partB3 = ais.part_b3_tax_payments || [];
   const totalCredited = partB1.reduce((sum, d) => sum + (d.total_amount_credited || d.total_amount || 0), 0);
   const totalTaxPaid = partB3.reduce((sum, ch) => sum + (ch.tax_amount || 0), 0);
 
@@ -454,6 +507,30 @@ function renderAllViews(): void {
   if (kpiCount) kpiCount.textContent = String(partB1.length);
   if (kpiCredited) kpiCredited.textContent = formatInr(totalCredited);
   if (kpiPaid) kpiPaid.textContent = formatInr(totalTaxPaid);
+}
+
+// ==========================================================================
+// Rendering Pipeline
+// ==========================================================================
+function renderAllViews(): void {
+  const data = state.structuredData;
+  if (!data) return;
+
+  const ais = data.aisJson || {} as AisDeveloperSchema;
+
+  // Reveal Workspace & Hide Upload Screen
+  document.getElementById('uploadSection')?.classList.add('hidden');
+  const workspace = document.getElementById('resultsWorkspace');
+  if (workspace) {
+    workspace.classList.remove('hidden');
+    workspace.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // 1. Header Banner
+  renderHeaderBanner(ais);
+
+  // 2. Render KPI Cards
+  renderKpiCards(ais);
 
   // 3. Populate Statutory ITR Form Advisor on the Main Page
   const itrAdvisorEl = document.getElementById('aisItrAdvisorEl') as AisItrAdvisor | null;
@@ -509,7 +586,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
         <div class="ais-pii-info">
           <i data-lucide="shield-check" class="ais-pii-icon"></i>
           <div>
-            <h4 class="ais-pii-title">Annual Information Statement (AIS - Form 168)</h4>
+            <h4 class="ais-pii-title">Annual Information Statement (AIS)</h4>
             <p class="ais-pii-desc">Assessee profile (Part A) and tax transaction breakdown (Part B) extracted directly from Income Tax Department document.</p>
           </div>
         </div>
@@ -520,7 +597,7 @@ function renderAisDashboard(ais: AisDeveloperSchema): void {
       </div>
 
       <!-- PART A: General Information Web Component -->
-      <ais-part-a tax-year="${escapeHtml(ais.tax_year || '2026-27')}"></ais-part-a>
+      <ais-part-a financial-year="${escapeHtml(ais.financial_year || '')}" assessment-year="${escapeHtml(ais.assessment_year || '')}" tax-year="${escapeHtml(ais.assessment_year || ais.tax_year || '')}"></ais-part-a>
 
       <!-- PART B1: TDS / TCS Transactions -->
       <div class="ais-part-section">
