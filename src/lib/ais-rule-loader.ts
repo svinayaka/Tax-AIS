@@ -9,8 +9,8 @@
  * - Never logs taxpayer information.
  */
 
-import rawPartARules from '../rules/ais-part-a.json';
-import rawPartBRules from '../rules/ais-part-b.json';
+import rawPartARules from '../rules/ais/ais-part-a.json';
+import rawPartBRules from '../rules/ais/ais-part-b.json';
 import type { AisPartARules, AisPartBRules, AisParserId } from '../types/ais-rules';
 
 const VALID_PARSER_IDS: Set<string> = new Set<AisParserId>([

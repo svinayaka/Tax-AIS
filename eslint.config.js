@@ -10,7 +10,7 @@ export default [
   js.configs.recommended,
   sonarjs.configs.recommended,
   {
-    files: ['src/**/*.{ts,js}'],
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

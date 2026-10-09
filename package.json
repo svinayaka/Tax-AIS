@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx tests/extractor/ais-extractor.spec.ts && tsx tests/integration/ais-classification.spec.ts",
+    "test": "playwright test",
+    "test:e2e": "playwright test",
     "lint": "eslint src/ index.html",
     "lint:fix": "eslint src/ index.html --fix",
     "stylelint": "stylelint 'src/**/*.{css,scss}'",
@@ -38,10 +39,14 @@
   "devDependencies": {
     "@html-eslint/eslint-plugin": "^0.66.1",
     "@html-eslint/parser": "^0.66.1",
+    "@playwright/test": "^1.64.0",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@typescript-eslint/eslint-plugin": "^8.71.1",
     "@typescript-eslint/parser": "^8.71.1",
+    "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.6.1",
     "eslint": "^9.39.5",
     "eslint-plugin-sonarjs": "^3.0.7",
@@ -58,10 +63,12 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@stencil/core": "^4.45.2",
     "@svinayaka/siddi-design-system": "^1.0.0",
     "canvas-confetti": "^1.9.4",
     "lucide": "^1.52.0",
-    "pdfjs-dist": "^6.4.299"
+    "lucide-react": "^1.54.0",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   }
 }

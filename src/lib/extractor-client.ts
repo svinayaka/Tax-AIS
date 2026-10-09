@@ -7,19 +7,12 @@
 import { extractStructuredData } from './extractor';
 import { classifyItr } from './itr-classifier';
 import type {
-  StructuredExtractionResult,
-  ItrClassificationResult
-} from '../types/ais';
-import type {
+  ExtractionClientResult,
   ExtractorWorkerRequest,
-  ExtractorWorkerResponse
-} from '../workers/extractor.worker';
+  ExtractorWorkerResponse,
+} from '../types/worker';
 
-export interface ExtractionClientResult {
-  structuredData: StructuredExtractionResult;
-  itrRecommendation: ItrClassificationResult;
-  executedInWorker: boolean;
-}
+export type { ExtractionClientResult };
 
 const WORKER_TIMEOUT_MS = 15000;
 let requestIdCounter = 0;

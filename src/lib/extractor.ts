@@ -72,7 +72,7 @@ export function extractStructuredData(rawText: string, customFields: string[] = 
 
   // 9. AIS Deterministic extraction if document matches Indian Tax AIS
   const lowerText = cleanedText.toLowerCase();
-  const isForm168Future = lowerText.includes('form 168') || lowerText.includes('form no. 168') || lowerText.includes('form no 168');
+  const isForm168Future = isForm168FutureDocument(lowerText);
   const isAis = !isForm168Future && (
     docClassification.type === 'ais' ||
     lowerText.includes('annual information statement') ||
@@ -181,8 +181,33 @@ function createEmptyResult(): StructuredExtractionResult {
   };
 }
 
+function isForm168FutureDocument(lowerText: string): boolean {
+  if (lowerText.includes('income-tax act, 2025')) {
+    return true;
+  }
+  const partAIdx = lowerText.indexOf('part a');
+  const headerSlice = partAIdx !== -1 ? lowerText.slice(0, partAIdx) : lowerText.slice(0, 300);
+  const headerHas168 =
+    headerSlice.includes('form 168') ||
+    headerSlice.includes('form no. 168') ||
+    headerSlice.includes('form no 168');
+  if (headerHas168) {
+    return true;
+  }
+
+  const hasAisSchedules =
+    lowerText.includes('part b1') ||
+    lowerText.includes('part b3') ||
+    lowerText.includes('information relating to tax deducted') ||
+    lowerText.includes('annual information statement (part b)');
+  const has168 =
+    lowerText.includes('form 168') ||
+    lowerText.includes('form no. 168') ||
+    lowerText.includes('form no 168');
+  return has168 && !hasAisSchedules;
+}
+
 const CLASSIFICATION_KEYWORDS: Array<{ type: string; keywords: string[]; score: number }> = [
-  { type: 'form_168_future', keywords: ['form 168', 'form no. 168', 'form no 168', 'income-tax act, 2025'], score: 50 },
   { type: 'form_26as', keywords: ['annual tax statement under section 203aa', 'annual tax statement'], score: 25 },
   { type: 'form_26as', keywords: ['form 26as', 'form no. 26as', 'form no 26as'], score: 10 },
   { type: 'ais', keywords: ['annual information statement'], score: 25 },
@@ -209,6 +234,9 @@ function scoreDocument(lowerText: string): Record<string, number> {
     medical: 0,
     financial: 0
   };
+  if (isForm168FutureDocument(lowerText)) {
+    scores.form_168_future += 50;
+  }
   for (const rule of CLASSIFICATION_KEYWORDS) {
     if (rule.keywords.some(kw => lowerText.includes(kw))) {
       scores[rule.type] = (scores[rule.type] || 0) + rule.score;
@@ -588,7 +616,7 @@ export function extractFinancialYear(text: string): string {
 }
 
 export function extractAssessmentYear(text: string): string {
-  const match = text.match(/(?:assessment\s+year|a\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
+  const match = text.match(/(?:assessment\s+year|tax\s+year(?:\s*\(t\.?y\.?\))?|a\.?y\.?|t\.?y\.?)\s*[:=-]?\s*(\d{4}-\d{2,4})/i);
   if (!match) return '';
   return normalizeYearRange(match[1]);
 }
@@ -710,7 +738,9 @@ function extractPartAGeneralInfo(text: string): PartAGeneralInfo {
   const emailAddress = emailMatch ? emailMatch[1].trim() : '';
 
   let address = '';
-  const addrMatch = text.match(/Address\s*[:=-]?\s*([a-z0-9\s,./-]+?)(?=-{5,}|Annual\s+Information\s+Statement|Part\s+B|\n\s*\n|$)/i);
+  const addrMatch =
+    text.match(/(?:^|\n)\s*address\s*[:=-]?\s*([a-z0-9\s,./-]+?)(?=-{5,}|annual\s+information\s+statement|part\s+b|\n\s*\n|$)/i) ??
+    text.match(/(?<!e-mail\s)(?<!email\s)\baddress\s*[:=-]?\s*([a-z0-9\s,./-]+?)(?=-{5,}|annual\s+information\s+statement|part\s+b|\n\s*\n|$)/i);
   if (addrMatch) {
     address = addrMatch[1].replace(/[-_]{5,}/g, '').trim();
   }

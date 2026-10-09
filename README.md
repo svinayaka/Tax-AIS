@@ -129,11 +129,19 @@ npm run build
 
 ## 🛠️ Tech Stack
 
-- **Core**: Vanilla JavaScript (ES Modules) & HTML5 Canvas
+- **Core**: React 19, TypeScript (Strict), HTML5 Canvas
 - **Design Tokens**: [`@svinayaka/siddi-design-system`](https://www.npmjs.com/package/@svinayaka/siddi-design-system)
 - **PDF Engine**: [`pdfjs-dist`](https://www.npmjs.com/package/pdfjs-dist)
-- **Icons**: [`lucide`](https://lucide.dev/)
+- **Icons**: [`lucide-react`](https://lucide.dev/)
 - **Build Tool**: [`Vite`](https://vitejs.dev/)
+
+---
+
+## 📚 Documentation
+
+- [Product Scope & Boundaries](PRODUCT_SCOPE.md) — Product vision, personas, statutory baseline, and non-goals.
+- [System Architecture](ARCHITECTURE.md) — Comprehensive technical architecture, pipelines, and security model.
+- [Developer & Agent Guidelines](AGENTS.md) — Code quality standards, SonarQube rules, and styling conventions.
 
 ---
 

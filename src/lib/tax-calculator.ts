@@ -7,54 +7,19 @@
  */
 
 import type { AisDeveloperSchema, CalculatorEligibility } from '../types/ais';
+import type {
+  TaxDeductionInputs,
+  TaxPositionStatus,
+  RegimeTaxBreakdown,
+  DualRegimeTaxComparison,
+} from '../types/tax';
 
-export interface TaxDeductionInputs {
-  section80C: number;     // EPF, PPF, ELSS, Life Insurance (cap: ₹1,50,000)
-  section80D: number;     // Health Insurance (cap: ₹75,000 total)
-  section80Ccd1b: number; // NPS Tier 1 exclusive (cap: ₹50,000)
-  section80Tta: number;   // Savings Bank Interest (cap: ₹10,000)
-  section24b: number;     // Home loan interest on self-occupied (cap: ₹2,00,000)
-  otherDeductions: number;// Other Chapter VI-A deductions
-}
-
-export type TaxPositionStatus = 'PAYABLE' | 'REFUND' | 'NIL';
-
-export interface RegimeTaxBreakdown {
-  regime: 'NEW' | 'OLD';
-  regimeName: string;
-  grossTotalIncome: number;
-  salaryIncome: number;
-  nonSalaryIncome: number;
-  standardDeduction: number;
-  eligibleDeductions: number;
-  taxableIncome: number;
-  slabTax: number;
-  rebate87A: number;
-  taxAfterRebate: number;
-  cess: number;
-  totalTaxLiability: number;
-  totalPrePaidTax: number;
-  netPayableOrRefund: number;
-  status: TaxPositionStatus;
-  // Standardized sign convention: positive = tax payable; negative = tax refund claimable
-  netTaxPosition: number;
-  netTaxStatus: TaxPositionStatus;
-}
-
-export interface DualRegimeTaxComparison {
-  isEligibleForItr1: boolean;
-  salaryIncome: number;
-  nonSalaryIncome: number;
-  grossTotalIncome: number;
-  totalTdsDeposited: number;
-  totalChallanTaxPaid: number;
-  totalPrePaidTax: number;
-  newRegime: RegimeTaxBreakdown;
-  oldRegime: RegimeTaxBreakdown;
-  recommendedRegime: 'NEW' | 'OLD';
-  taxSavings: number;
-  taxOptimizationTips: string[];
-}
+export type {
+  TaxDeductionInputs,
+  TaxPositionStatus,
+  RegimeTaxBreakdown,
+  DualRegimeTaxComparison,
+};
 
 export const DEFAULT_DEDUCTIONS: TaxDeductionInputs = {
   section80C: 0,

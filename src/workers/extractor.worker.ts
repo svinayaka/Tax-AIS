@@ -8,28 +8,18 @@
 
 import { extractStructuredData } from '../lib/extractor';
 import { classifyItr } from '../lib/itr-classifier';
-import type { StructuredExtractionResult, ItrClassificationResult } from '../types/ais';
+import type {
+  ExtractorWorkerRequest,
+  ExtractorWorkerSuccessResponse,
+  ExtractorWorkerErrorResponse,
+} from '../types/worker';
 
-export interface ExtractorWorkerRequest {
-  id: string;
-  rawText: string;
-  customFields?: string[];
-}
-
-export interface ExtractorWorkerSuccessResponse {
-  id: string;
-  type: 'SUCCESS';
-  structuredData: StructuredExtractionResult;
-  itrRecommendation: ItrClassificationResult;
-}
-
-export interface ExtractorWorkerErrorResponse {
-  id: string;
-  type: 'ERROR';
-  error: string;
-}
-
-export type ExtractorWorkerResponse = ExtractorWorkerSuccessResponse | ExtractorWorkerErrorResponse;
+export type {
+  ExtractorWorkerRequest,
+  ExtractorWorkerSuccessResponse,
+  ExtractorWorkerErrorResponse,
+};
+export type { ExtractorWorkerResponse } from '../types/worker';
 
 globalThis.addEventListener('message', (event: MessageEvent<ExtractorWorkerRequest>) => {
   if (event.origin && event.origin !== globalThis.location?.origin) {

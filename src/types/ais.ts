@@ -1,8 +1,212 @@
 /**
- * Type definitions for Tax-AIS extraction engine
- * Matches Indian Income Tax AIS / Form 26AS Developer Contract
+ * Canonical Data Model for Tax-AIS
+ * Authoritative, typed contract for extracted Annual Information Statements (AIS / Form 26AS / Form 168).
+ *
+ * Canonical top-level structure:
+ * - document : Document-level statutory metadata & regime periods
+ * - partA    : Taxpayer general information
+ * - partB    : Section-based tax schedules (B1, B2, B3, B4, otherSections)
  */
 
+// ============================================================================
+// 1. Extraction Statuses & Core Document Metadata
+// ============================================================================
+
+export type CanonicalExtractionStatus =
+  | 'parsed'
+  | 'empty'
+  | 'not_found'
+  | 'failed'
+  | 'unsupported';
+
+export type ExtractionStatus =
+  | CanonicalExtractionStatus
+  | 'extracted'
+  | 'not-present';
+
+export type AisDocumentType = 'AIS' | 'FORM_26AS' | 'FORM_168';
+
+export type StatutoryRegime = 'ITA_1961' | 'ITA_2025';
+
+/**
+ * Period fields strictly distinguish between:
+ * - ITA_1961: financialYear (e.g., "2025-26") + assessmentYear (e.g., "2026-27"). taxYear is null.
+ * - ITA_2025: taxYear (e.g., "2026-27"). financialYear and assessmentYear are strictly null.
+ */
+export type DocumentPeriod =
+  | {
+      statutoryRegime: 'ITA_1961';
+      financialYear: string;
+      assessmentYear: string;
+      taxYear: null;
+    }
+  | {
+      statutoryRegime: 'ITA_2025';
+      financialYear: null;
+      assessmentYear: null;
+      taxYear: string;
+    };
+
+export type DocumentMeta = {
+  documentType: AisDocumentType;
+  schemaVersion: string;
+  extractionRulesVersion: string;
+} & DocumentPeriod;
+
+// ============================================================================
+// 2. Part A - Taxpayer & General Information
+// ============================================================================
+
+export interface PartA {
+  extractionStatus: ExtractionStatus;
+  pan: string | null;
+  maskedAadhaar: string | null;
+  name: string | null;
+  dateOfBirth: string | null;
+  mobile: string | null;
+  email: string | null;
+  address: string | null;
+}
+
+// ============================================================================
+// 3. Part B - Section Schedules
+// ============================================================================
+
+// --- B1: TDS / TCS Information ---
+export type B1TransactionType = 'TDS' | 'TCS';
+export type B1TransactionStatus = 'ACTIVE' | 'INACTIVE' | 'UNKNOWN';
+
+export interface PartB1Transaction {
+  quarter: string | null;
+  date: string | null;
+  amountPaidOrCredited: number;
+  taxDeductedOrCollected: number;
+  taxDeposited: number;
+  status: B1TransactionStatus;
+}
+
+export interface PartB1Record {
+  informationCode: string;
+  description: string;
+  sourceName: string;
+  tan: string | null;
+  amount: number;
+  count: number;
+  transactionType: B1TransactionType;
+  transactions: PartB1Transaction[];
+}
+
+export interface PartB1Section {
+  section: 'B1';
+  category: 'TDS_TCS';
+  extractionStatus: ExtractionStatus;
+  records: PartB1Record[];
+}
+
+// --- B2: Specified Financial Transactions (SFT) ---
+export interface PartB2Record {
+  informationCode: string;
+  description: string;
+  reportingEntity: string;
+  amount: number;
+  count: number;
+  transactionDate: string | null;
+  status: string | null;
+}
+
+export interface PartB2Section {
+  section: 'B2';
+  category: 'SFT';
+  extractionStatus: ExtractionStatus;
+  records: PartB2Record[];
+}
+
+// --- B3: Payment of Taxes (Advance Tax / Self-Assessment) ---
+export interface PartB3Record {
+  financialYear: string | null;
+  majorHead: string;
+  minorHead: string;
+  tax: number;
+  surcharge: number;
+  cess: number;
+  other: number;
+  totalAmount: number;
+  bsrCode: string | null;
+  depositDate: string | null;
+  challanSerialNumber: string | null;
+  cin: string | null;
+}
+
+export interface PartB3Section {
+  section: 'B3';
+  category: 'TAX_PAYMENTS';
+  extractionStatus: ExtractionStatus;
+  records: PartB3Record[];
+}
+
+// --- B4: Demand and Refund ---
+export type B4RecordType = 'DEMAND' | 'REFUND' | 'UNKNOWN';
+
+export interface PartB4Record {
+  financialYear: string | null;
+  assessmentYear: string | null;
+  type: B4RecordType;
+  amount: number;
+  date: string | null;
+  status: string | null;
+}
+
+export interface PartB4Section {
+  section: 'B4';
+  category: 'DEMAND_REFUND';
+  extractionStatus: ExtractionStatus;
+  records: PartB4Record[];
+}
+
+// --- Other Sections (B5, B6, B7, future statutory additions) ---
+export interface PartBOtherRecord {
+  informationCode?: string;
+  description?: string;
+  sourceName?: string;
+  amount?: number | null;
+  count?: number | null;
+  date?: string | null;
+  rawFields?: Record<string, string | number | null>;
+}
+
+export interface PartBOtherSection {
+  section: string;
+  category: string;
+  extractionStatus: ExtractionStatus;
+  records: PartBOtherRecord[];
+}
+
+// --- Part B Container ---
+export interface PartB {
+  b1: PartB1Section;
+  b2: PartB2Section;
+  b3: PartB3Section;
+  b4: PartB4Section;
+  otherSections: PartBOtherSection[];
+}
+
+// ============================================================================
+// 4. Canonical Top-Level AIS Document
+// ============================================================================
+
+export interface AisDocument {
+  document: DocumentMeta;
+  partA: PartA;
+  partB: PartB;
+}
+
+// ============================================================================
+// 5. Transitional Legacy Types
+// Preserved temporarily to prevent compilation breaks in downstream components
+// (extractor, ITR classifier, UI) prior to their scheduled migration.
+// ============================================================================
+
+// Legacy Part A
 export interface PartAGeneralInfo {
   name_of_assessee: string;
   pan: string;
@@ -13,6 +217,7 @@ export interface PartAGeneralInfo {
   address: string;
 }
 
+// Legacy Part B1
 export interface PartB1LineItem {
   sr_no?: number;
   quarter: string;
@@ -23,6 +228,7 @@ export interface PartB1LineItem {
   status: string;
 }
 
+// Legacy Part B1 Transaction
 export interface PartB1TdsTcsTransaction {
   sr_no: number;
   information_code: string;
@@ -33,6 +239,7 @@ export interface PartB1TdsTcsTransaction {
   line_items: PartB1LineItem[];
 }
 
+// Legacy Part B2
 export interface PartB2SftTransaction {
   sr_no: number;
   information_code: string;
@@ -43,6 +250,7 @@ export interface PartB2SftTransaction {
   transaction_date: string;
 }
 
+// Legacy Part B3
 export interface PartB3TaxPayment {
   financial_year: string;
   major_head: string;
@@ -54,6 +262,7 @@ export interface PartB3TaxPayment {
   challan_serial_number: number;
 }
 
+// Legacy Part B4
 export interface PartB4DemandRefund {
   sr_no?: number;
   financial_year: string;
@@ -68,11 +277,7 @@ export interface PartB4DemandRefund {
   date_of_issuance?: string;
 }
 
-/**
- * Statutory Period & Future Form 168 Year Model
- * Under Income-tax Act, 1961 (current mode), periods are partitioned into financial_year and assessment_year.
- * Under Income-tax Act, 2025 (future mode), statutory period uses tax_year directly.
- */
+// Legacy StatutoryPeriod
 export type StatutoryPeriod =
   | {
       regime: 'ITA_1961';
@@ -88,14 +293,7 @@ export const SCHEMA_VERSION = '1.0' as const;
 export const ITR_ROUTING_RULE_VERSION = 'AY2026-27.1' as const;
 export const TAX_RULE_VERSION = 'AY2026-27.1' as const;
 
-/**
- * Canonical Developer Schema contract for AIS.
- *
- * Financial Year vs Assessment Year:
- * - financial_year: source-document financial year (e.g. "2025-26").
- * - assessment_year: corresponding filing/rule year (e.g. "2026-27").
- * - tax_year: preserved for backward compatibility and migration.
- */
+// Legacy AisDeveloperSchema
 export interface AisDeveloperSchema {
   financial_year: string;
   assessment_year: string;
@@ -107,30 +305,14 @@ export interface AisDeveloperSchema {
   part_b4_demand_refunds: PartB4DemandRefund[];
 }
 
-/**
- * Extraction status indicator for individual document sections.
- * Distinguishes between successfully extracted data, sections absent from source document,
- * unsupported formats, and parser extraction failures.
- */
-export type ExtractionStatus =
-  | 'extracted'
-  | 'not-present'
-  | 'unsupported'
-  | 'failed';
-
-/**
- * Structured extraction warning emitted during section parsing.
- * Code and section identifiers allow programmatic handling without leaking sensitive PII.
- */
+// Legacy ExtractionWarning
 export interface ExtractionWarning {
   code: string;
   section: 'A' | 'B1' | 'B2' | 'B3' | 'B4';
   message: string;
 }
 
-/**
- * Authoritative machine-readable extraction statuses across AIS sections.
- */
+// Legacy SectionStatuses
 export interface SectionStatuses {
   part_a: ExtractionStatus;
   part_b1: ExtractionStatus;
@@ -145,18 +327,14 @@ export interface SectionStatuses {
   [key: string]: ExtractionStatus | undefined;
 }
 
-/**
- * Section container with status, records, and parser warnings.
- */
+// Legacy ExtractionSection
 export interface ExtractionSection<T> {
   status: ExtractionStatus;
   records: T[];
   warnings: string[];
 }
 
-/**
- * Strict canonical extraction envelope per ARCHITECTURE.md Section 14.
- */
+// Legacy CanonicalExtractionEnvelope
 export interface CanonicalExtractionEnvelope {
   schema_version: '1.0';
   document_type: 'AIS' | 'FORM_26AS';
@@ -165,6 +343,7 @@ export interface CanonicalExtractionEnvelope {
   warnings: ExtractionWarning[];
 }
 
+// Legacy DocumentClassification
 export interface DocumentClassification {
   type: string;
   confidence: string;
@@ -174,6 +353,7 @@ export interface DocumentClassification {
   themeColor: string;
 }
 
+// Legacy KeyValuePair
 export interface KeyValuePair {
   key: string;
   value: string;
@@ -204,6 +384,7 @@ export interface ExtractionMetadata {
   extractedAt: string;
 }
 
+// Legacy StructuredExtractionResult
 export interface StructuredExtractionResult {
   schema_version: '1.0';
   extraction_rules_version: string;
@@ -324,34 +505,8 @@ export interface ItrClassificationResult {
   detectedFactors: ItrDetectedFactors;
 }
 
-export type TaxPositionStatus = 'PAYABLE' | 'REFUND' | 'NIL';
-
-/**
- * Tax computation result breakdown for a specific tax regime (AY 2026-27).
- * Exposes individual statutory tax components explicitly per ARCHITECTURE.md Section 10.10.
- */
-export interface RegimeTaxResult {
-  grossTotalIncome: number;
-  taxableIncome: number;
-
-  incomeTax: number;
-  rebate87A: number;
-
-  surchargeBeforeMarginalRelief: number;
-  marginalRelief: number;
-  surchargeAfterMarginalRelief: number;
-
-  healthEducationCess: number;
-  totalTaxLiability: number;
-
-  prepaidTaxes: number;
-
-  // Sign convention: positive indicates tax payable (due); negative indicates tax refund claimable
-  netTaxPosition: number;
-  netTaxStatus: TaxPositionStatus;
-}
-
-export interface CalculatorEligibility {
-  supported: boolean;
-  reasons: string[];
-}
+export type {
+  TaxPositionStatus,
+  RegimeTaxResult,
+  CalculatorEligibility,
+} from './tax';

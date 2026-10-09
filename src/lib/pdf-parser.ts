@@ -8,27 +8,21 @@ try {
   console.warn('Worker configuration note:', err);
 }
 
-export interface TextItem {
-  str: string;
-  dir: string;
-  width: number;
-  height: number;
-  transform: number[];
-  x: number;
-  y: number;
-  fontSize: number;
-  fontName?: string;
-  hasEOL?: boolean;
-}
+import type {
+  TextItem,
+  TextLine,
+  PdfPageViewport,
+  PdfDocumentLike,
+  PdfRenderablePage,
+} from '../types/pdf';
 
-export interface TextLine {
-  y: number;
-  items: TextItem[];
-  minX: number;
-  maxX: number;
-  avgFontSize: number;
-  text?: string;
-}
+export type {
+  TextItem,
+  TextLine,
+  PdfPageViewport,
+  PdfDocumentLike,
+  PdfRenderablePage,
+};
 
 async function extractSinglePage(
   pdf: any,
@@ -264,28 +258,6 @@ function assembleLineText(items: TextItem[]): string {
     parts.push(item.str);
   }
   return parts.join('').trim();
-}
-
-export interface PdfPageViewport {
-  width: number;
-  height: number;
-  scale: number;
-}
-
-export interface PdfDocumentLike {
-  numPages: number;
-  getPage: (pageNumber: number) => Promise<PdfRenderablePage>;
-  getMetadata?: () => Promise<{ info?: Record<string, string> }>;
-}
-
-export interface PdfRenderablePage {
-  getViewport: (options: { scale: number }) => PdfPageViewport;
-  render: (renderContext: {
-    canvasContext: CanvasRenderingContext2D;
-    viewport: PdfPageViewport;
-    enableWebGL?: boolean;
-    renderInteractiveForms?: boolean;
-  }) => { promise: Promise<void> };
 }
 
 /**

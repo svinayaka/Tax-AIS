@@ -1,0 +1,191 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tax-ais.local/schemas/itr-rules.schema.json",
+  "title": "ITR Statutory Routing and Tax Computation Ruleset Schema",
+  "description": "JSON Schema specification for statutory Indian Income Tax Return (ITR) classification criteria, disqualifiers, and dual-regime tax slabs.",
+  "type": "object",
+  "required": [
+    "rulesetVersion",
+    "statutoryRegime",
+    "assessmentYear",
+    "financialYear",
+    "formType",
+    "eligibilityCriteria",
+    "disqualifiers",
+    "externalChecklist",
+    "taxComputation"
+  ],
+  "properties": {
+    "rulesetVersion": {
+      "type": "string",
+      "description": "SemVer version identifier of this ruleset configuration"
+    },
+    "statutoryRegime": {
+      "type": "string",
+      "enum": ["ITA_1961", "ITA_2025"],
+      "description": "Governing statutory income tax act regime"
+    },
+    "assessmentYear": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}$",
+      "description": "Applicable statutory assessment year in YYYY-YY format"
+    },
+    "financialYear": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}$",
+      "description": "Corresponding source financial year in YYYY-YY format"
+    },
+    "formType": {
+      "type": "string",
+      "enum": ["ITR-1", "ITR-2", "ITR-3", "ITR-4"],
+      "description": "Statutory ITR form code"
+    },
+    "formName": {
+      "type": "string",
+      "description": "Official title or nomenclature of the return form (e.g., Sahaj)"
+    },
+    "eligibilityCriteria": {
+      "type": "object",
+      "required": [
+        "maxTotalIncome",
+        "maxAgriculturalIncome",
+        "permittedHouseProperties",
+        "permittedIncomeSources"
+      ],
+      "properties": {
+        "maxTotalIncome": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Upper statutory ceiling on Gross Total Income in INR"
+        },
+        "maxAgriculturalIncome": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Statutory cap on exempt agricultural income in INR"
+        },
+        "permittedHouseProperties": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of house property units permitted for this form"
+        },
+        "permittedIncomeSources": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Allowed income streams (e.g. Salary, House Property, Other Sources)"
+        },
+        "capitalGains112aExemptionLimit": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Statutory LTCG u/s 112A threshold allowable without requiring ITR-2"
+        }
+      }
+    },
+    "disqualifiers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "elevatesTo"],
+        "properties": {
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "statutoryReference": { "type": "string" },
+          "elevatesTo": { "type": "string", "enum": ["ITR-2", "ITR-3", "ITR-4"] }
+        }
+      }
+    },
+    "externalChecklist": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "question", "impactIfYes"],
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string" },
+          "impactIfYes": { "type": "string" }
+        }
+      }
+    },
+    "taxComputation": {
+      "type": "object",
+      "required": ["newRegime", "oldRegime"],
+      "properties": {
+        "newRegime": {
+          "type": "object",
+          "required": [
+            "section",
+            "isDefault",
+            "standardDeductionSalary",
+            "slabs",
+            "rebate87A",
+            "cessPercentage"
+          ],
+          "properties": {
+            "section": { "type": "string" },
+            "isDefault": { "type": "boolean" },
+            "standardDeductionSalary": { "type": "number", "minimum": 0 },
+            "slabs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to", "rate"],
+                "properties": {
+                  "from": { "type": "number" },
+                  "to": { "type": ["number", "null"] },
+                  "rate": { "type": "number", "minimum": 0, "maximum": 1 }
+                }
+              }
+            },
+            "rebate87A": {
+              "type": "object",
+              "required": ["maxIncomeThreshold", "maxRebateAmount"],
+              "properties": {
+                "maxIncomeThreshold": { "type": "number" },
+                "maxRebateAmount": { "type": "number" },
+                "marginalReliefEligible": { "type": "boolean" }
+              }
+            },
+            "cessPercentage": { "type": "number", "minimum": 0 }
+          }
+        },
+        "oldRegime": {
+          "type": "object",
+          "required": [
+            "standardDeductionSalary",
+            "slabs",
+            "rebate87A",
+            "cessPercentage",
+            "allowedDeductions"
+          ],
+          "properties": {
+            "standardDeductionSalary": { "type": "number", "minimum": 0 },
+            "slabs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["from", "to", "rate"],
+                "properties": {
+                  "from": { "type": "number" },
+                  "to": { "type": ["number", "null"] },
+                  "rate": { "type": "number", "minimum": 0, "maximum": 1 }
+                }
+              }
+            },
+            "rebate87A": {
+              "type": "object",
+              "required": ["maxIncomeThreshold", "maxRebateAmount"],
+              "properties": {
+                "maxIncomeThreshold": { "type": "number" },
+                "maxRebateAmount": { "type": "number" }
+              }
+            },
+            "cessPercentage": { "type": "number", "minimum": 0 },
+            "allowedDeductions": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tax-ais.dev/schemas/ais.schema.json",
+  "title": "AisDocument",
+  "description": "Canonical data contract for Annual Information Statement (AIS / Form 26AS / Form 168) extractions.",
+  "type": "object",
+  "required": ["document", "partA", "partB"],
+  "additionalProperties": false,
+  "properties": {
+    "document": {
+      "type": "object",
+      "description": "Document-level statutory metadata and period specification.",
+      "required": ["documentType", "schemaVersion", "extractionRulesVersion", "statutoryRegime"],
+      "properties": {
+        "documentType": {
+          "type": "string",
+          "enum": ["AIS", "FORM_26AS", "FORM_168"]
+        },
+        "schemaVersion": {
+          "type": "string"
+        },
+        "extractionRulesVersion": {
+          "type": "string"
+        },
+        "statutoryRegime": {
+          "type": "string",
+          "enum": ["ITA_1961", "ITA_2025"]
+        },
+        "financialYear": {
+          "type": ["string", "null"]
+        },
+        "assessmentYear": {
+          "type": ["string", "null"]
+        },
+        "taxYear": {
+          "type": ["string", "null"]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "statutoryRegime": { "const": "ITA_1961" },
+            "financialYear": { "type": "string" },
+            "assessmentYear": { "type": "string" },
+            "taxYear": { "type": "null" }
+          },
+          "required": ["financialYear", "assessmentYear", "taxYear"]
+        },
+        {
+          "properties": {
+            "statutoryRegime": { "const": "ITA_2025" },
+            "financialYear": { "type": "null" },
+            "assessmentYear": { "type": "null" },
+            "taxYear": { "type": "string" }
+          },
+          "required": ["financialYear", "assessmentYear", "taxYear"]
+        }
+      ]
+    },
+    "partA": {
+      "type": "object",
+      "description": "Taxpayer identification and general profile information.",
+      "required": [
+        "extractionStatus",
+        "pan",
+        "maskedAadhaar",
+        "name",
+        "dateOfBirth",
+        "mobile",
+        "email",
+        "address"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "extractionStatus": {
+          "type": "string",
+          "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+        },
+        "pan": { "type": ["string", "null"] },
+        "maskedAadhaar": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "dateOfBirth": { "type": ["string", "null"] },
+        "mobile": { "type": ["string", "null"] },
+        "email": { "type": ["string", "null"] },
+        "address": { "type": ["string", "null"] }
+      }
+    },
+    "partB": {
+      "type": "object",
+      "description": "Section-based financial transaction schedules.",
+      "required": ["b1", "b2", "b3", "b4", "otherSections"],
+      "additionalProperties": false,
+      "properties": {
+        "b1": {
+          "type": "object",
+          "description": "Part B1 - Information relating to tax deducted or collected at source (TDS / TCS).",
+          "required": ["section", "category", "extractionStatus", "records"],
+          "additionalProperties": false,
+          "properties": {
+            "section": { "const": "B1" },
+            "category": { "const": "TDS_TCS" },
+            "extractionStatus": {
+              "type": "string",
+              "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "informationCode",
+                  "description",
+                  "sourceName",
+                  "tan",
+                  "amount",
+                  "count",
+                  "transactionType",
+                  "transactions"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "informationCode": { "type": "string" },
+                  "description": { "type": "string" },
+                  "sourceName": { "type": "string" },
+                  "tan": { "type": ["string", "null"] },
+                  "amount": { "type": "number" },
+                  "count": { "type": "integer" },
+                  "transactionType": {
+                    "type": "string",
+                    "enum": ["TDS", "TCS"]
+                  },
+                  "transactions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "quarter",
+                        "date",
+                        "amountPaidOrCredited",
+                        "taxDeductedOrCollected",
+                        "taxDeposited",
+                        "status"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "quarter": { "type": ["string", "null"] },
+                        "date": { "type": ["string", "null"] },
+                        "amountPaidOrCredited": { "type": "number" },
+                        "taxDeductedOrCollected": { "type": "number" },
+                        "taxDeposited": { "type": "number" },
+                        "status": {
+                          "type": "string",
+                          "enum": ["ACTIVE", "INACTIVE", "UNKNOWN"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "b2": {
+          "type": "object",
+          "description": "Part B2 - Specified Financial Transactions (SFT).",
+          "required": ["section", "category", "extractionStatus", "records"],
+          "additionalProperties": false,
+          "properties": {
+            "section": { "const": "B2" },
+            "category": { "const": "SFT" },
+            "extractionStatus": {
+              "type": "string",
+              "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "informationCode",
+                  "description",
+                  "reportingEntity",
+                  "amount",
+                  "count",
+                  "transactionDate",
+                  "status"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "informationCode": { "type": "string" },
+                  "description": { "type": "string" },
+                  "reportingEntity": { "type": "string" },
+                  "amount": { "type": "number" },
+                  "count": { "type": "integer" },
+                  "transactionDate": { "type": ["string", "null"] },
+                  "status": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        },
+        "b3": {
+          "type": "object",
+          "description": "Part B3 - Information relating to payment of taxes (Advance Tax / Self-Assessment).",
+          "required": ["section", "category", "extractionStatus", "records"],
+          "additionalProperties": false,
+          "properties": {
+            "section": { "const": "B3" },
+            "category": { "const": "TAX_PAYMENTS" },
+            "extractionStatus": {
+              "type": "string",
+              "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "financialYear",
+                  "majorHead",
+                  "minorHead",
+                  "tax",
+                  "surcharge",
+                  "cess",
+                  "other",
+                  "totalAmount",
+                  "bsrCode",
+                  "depositDate",
+                  "challanSerialNumber",
+                  "cin"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "financialYear": { "type": ["string", "null"] },
+                  "majorHead": { "type": "string" },
+                  "minorHead": { "type": "string" },
+                  "tax": { "type": "number" },
+                  "surcharge": { "type": "number" },
+                  "cess": { "type": "number" },
+                  "other": { "type": "number" },
+                  "totalAmount": { "type": "number" },
+                  "bsrCode": { "type": ["string", "null"] },
+                  "depositDate": { "type": ["string", "null"] },
+                  "challanSerialNumber": { "type": ["string", "null"] },
+                  "cin": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        },
+        "b4": {
+          "type": "object",
+          "description": "Part B4 - Demand and Refund records.",
+          "required": ["section", "category", "extractionStatus", "records"],
+          "additionalProperties": false,
+          "properties": {
+            "section": { "const": "B4" },
+            "category": { "const": "DEMAND_REFUND" },
+            "extractionStatus": {
+              "type": "string",
+              "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+            },
+            "records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "financialYear",
+                  "assessmentYear",
+                  "type",
+                  "amount",
+                  "date",
+                  "status"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "financialYear": { "type": ["string", "null"] },
+                  "assessmentYear": { "type": ["string", "null"] },
+                  "type": {
+                    "type": "string",
+                    "enum": ["DEMAND", "REFUND", "UNKNOWN"]
+                  },
+                  "amount": { "type": "number" },
+                  "date": { "type": ["string", "null"] },
+                  "status": { "type": ["string", "null"] }
+                }
+              }
+            }
+          }
+        },
+        "otherSections": {
+          "type": "array",
+          "description": "Additional schedules (B5, B6, B7, future statutory sections).",
+          "items": {
+            "type": "object",
+            "required": ["section", "category", "extractionStatus", "records"],
+            "additionalProperties": false,
+            "properties": {
+              "section": { "type": "string" },
+              "category": { "type": "string" },
+              "extractionStatus": {
+                "type": "string",
+                "enum": ["parsed", "empty", "not_found", "failed", "unsupported"]
+              },
+              "records": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "informationCode": { "type": "string" },
+                    "description": { "type": "string" },
+                    "sourceName": { "type": "string" },
+                    "amount": { "type": ["number", "null"] },
+                    "count": { "type": ["integer", "null"] },
+                    "date": { "type": ["string", "null"] },
+                    "rawFields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": ["string", "number", "null"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

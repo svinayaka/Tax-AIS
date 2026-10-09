@@ -15,18 +15,8 @@ import type {
   SectionStatuses
 } from '../types/ais';
 import { deriveAyFromFy, deriveFyFromAy } from './extractor';
-
-export interface StoredSession {
-  id: string; // Fixed key 'active_session'
-  fileName: string;
-  fileType: string;
-  fileBuffer: ArrayBuffer;
-  rawText: string;
-  structuredData: StructuredExtractionResult;
-  itrRecommendation?: ItrClassificationResult;
-  savedAt: number; // Unix epoch ms
-  expiresAt: number; // Unix epoch ms (savedAt + 24 hours)
-}
+import type { StoredSession } from '../types/storage';
+export type { StoredSession };
 
 const DB_NAME = 'tax_ais_local_storage';
 const DB_VERSION = 1;
